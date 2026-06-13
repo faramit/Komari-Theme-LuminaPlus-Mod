@@ -6,6 +6,7 @@ import {
   CircleDollarSign,
   LayoutTemplate,
   LayoutGrid,
+  ListFilter,
   Moon,
   RefreshCw,
   Rows3,
@@ -136,6 +137,40 @@ function applyClientAssignment(
   return next;
 }
 
+function getAssignedTaskId(
+  bindings: HomepagePingTaskBindings,
+  clientUuid: string,
+): string | null {
+  for (const [taskId, clients] of Object.entries(bindings)) {
+    if (clients.includes(clientUuid)) return taskId;
+  }
+  return null;
+}
+
+function applyAvailableClientAssignments(
+  bindings: HomepagePingTaskBindings,
+  taskId: number,
+  clientUuids: string[],
+) {
+  const taskKey = String(taskId);
+  const next = pruneBindings(bindings);
+  const selected = new Set(next[taskKey] ?? []);
+
+  for (const clientUuid of clientUuids) {
+    const assignedTaskId = getAssignedTaskId(next, clientUuid);
+    if (assignedTaskId && assignedTaskId !== taskKey) continue;
+    selected.add(clientUuid);
+  }
+
+  if (selected.size > 0) {
+    next[taskKey] = [...selected].sort((left, right) => left.localeCompare(right));
+  } else {
+    delete next[taskKey];
+  }
+
+  return next;
+}
+
 export function ThemeManage() {
   const { data: config, isLoading: configLoading } = usePublicConfig();
   const [draftAppearance, setDraftAppearance] = useState<Appearance>("system");
@@ -144,6 +179,9 @@ export function ThemeManage() {
   const [draftMobileNodeViewMode, setDraftMobileNodeViewMode] =
     useState<NodeViewMode>("compact");
   const [draftBindings, setDraftBindings] = useState<HomepagePingTaskBindings>({});
+  const [draftShowHomeOverview, setDraftShowHomeOverview] = useState(true);
+  const [draftShowGroupTabs, setDraftShowGroupTabs] = useState(true);
+  const [draftMoveOfflineNodesBack, setDraftMoveOfflineNodesBack] = useState(true);
   const [draftShowCostSummary, setDraftShowCostSummary] = useState(true);
   const [draftCompactShowTrafficTotal, setDraftCompactShowTrafficTotal] = useState(true);
   const [draftCompactShowBilling, setDraftCompactShowBilling] = useState(true);
@@ -188,6 +226,9 @@ export function ThemeManage() {
   const sourceDesktopNodeViewMode = sourceThemeSettings.desktopNodeViewMode;
   const sourceMobileNodeViewMode = sourceThemeSettings.mobileNodeViewMode;
   const sourceBindings = sourceThemeSettings.homepagePingBindings;
+  const sourceShowHomeOverview = sourceThemeSettings.showHomeOverview;
+  const sourceShowGroupTabs = sourceThemeSettings.showGroupTabs;
+  const sourceMoveOfflineNodesBack = sourceThemeSettings.moveOfflineNodesBack;
   const sourceShowCostSummary = sourceThemeSettings.showCostSummary;
   const sourceCompactShowTrafficTotal = sourceThemeSettings.compactShowTrafficTotal;
   const sourceCompactShowBilling = sourceThemeSettings.compactShowBilling;
@@ -218,6 +259,9 @@ export function ThemeManage() {
     setDraftDesktopNodeViewMode(sourceDesktopNodeViewMode);
     setDraftMobileNodeViewMode(sourceMobileNodeViewMode);
     setDraftBindings(sourceBindings);
+    setDraftShowHomeOverview(sourceShowHomeOverview);
+    setDraftShowGroupTabs(sourceShowGroupTabs);
+    setDraftMoveOfflineNodesBack(sourceMoveOfflineNodesBack);
     setDraftShowCostSummary(sourceShowCostSummary);
     setDraftCompactShowTrafficTotal(sourceCompactShowTrafficTotal);
     setDraftCompactShowBilling(sourceCompactShowBilling);
@@ -229,11 +273,14 @@ export function ThemeManage() {
     sourceAppearance,
     sourceDesktopNodeViewMode,
     sourceMobileNodeViewMode,
+    sourceMoveOfflineNodesBack,
     sourceBindings,
     sourceCompactShowBilling,
     sourceCompactShowTrafficTotal,
     sourceCostIgnoredText,
     sourceCostRateApiUrl,
+    sourceShowGroupTabs,
+    sourceShowHomeOverview,
     sourceShowCostSummary,
   ]);
 
@@ -298,6 +345,9 @@ export function ThemeManage() {
     draftDesktopNodeViewMode !== sourceDesktopNodeViewMode ||
     draftMobileNodeViewMode !== sourceMobileNodeViewMode ||
     draftBindingsSerialized !== sourceBindingsSerialized ||
+    draftShowHomeOverview !== sourceShowHomeOverview ||
+    draftShowGroupTabs !== sourceShowGroupTabs ||
+    draftMoveOfflineNodesBack !== sourceMoveOfflineNodesBack ||
     draftShowCostSummary !== sourceShowCostSummary ||
     draftCompactShowTrafficTotal !== sourceCompactShowTrafficTotal ||
     draftCompactShowBilling !== sourceCompactShowBilling ||
@@ -331,6 +381,9 @@ export function ThemeManage() {
         desktopNodeViewMode: draftDesktopNodeViewMode,
         mobileNodeViewMode: draftMobileNodeViewMode,
         homepagePingBindings: pruneBindings(draftBindings),
+        showHomeOverview: draftShowHomeOverview,
+        showGroupTabs: draftShowGroupTabs,
+        moveOfflineNodesBack: draftMoveOfflineNodesBack,
         showCostSummary: draftShowCostSummary,
         compactShowTrafficTotal: draftCompactShowTrafficTotal,
         compactShowBilling: draftCompactShowBilling,
@@ -359,6 +412,9 @@ export function ThemeManage() {
     setDraftDesktopNodeViewMode(sourceDesktopNodeViewMode);
     setDraftMobileNodeViewMode(sourceMobileNodeViewMode);
     setDraftBindings(sourceBindings);
+    setDraftShowHomeOverview(sourceShowHomeOverview);
+    setDraftShowGroupTabs(sourceShowGroupTabs);
+    setDraftMoveOfflineNodesBack(sourceMoveOfflineNodesBack);
     setDraftShowCostSummary(sourceShowCostSummary);
     setDraftCompactShowTrafficTotal(sourceCompactShowTrafficTotal);
     setDraftCompactShowBilling(sourceCompactShowBilling);
@@ -546,6 +602,63 @@ export function ThemeManage() {
       </InstancePanel>
 
       <InstancePanel
+        title="首页巡检"
+        description="控制首页顶部总览、分组筛选和节点排序方式；适合节点较多时快速查看状态。"
+        aside={<ListFilter size={16} />}
+      >
+        <div className="grid gap-3 md:grid-cols-3">
+          <label className="surface-inset flex items-center justify-between gap-3 px-4 py-3">
+            <span className="min-w-0">
+              <span className="block text-[13px] font-medium text-[var(--text-primary)]">
+                显示顶部总览
+              </span>
+              <span className="mt-1 block text-[11px] text-[var(--text-tertiary)]">
+                展示时间、在线数、地区、流量和速率。
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              checked={draftShowHomeOverview}
+              onChange={(event) => setDraftShowHomeOverview(event.target.checked)}
+              className="h-4 w-4 shrink-0 accent-[var(--accent-500)]"
+            />
+          </label>
+          <label className="surface-inset flex items-center justify-between gap-3 px-4 py-3">
+            <span className="min-w-0">
+              <span className="block text-[13px] font-medium text-[var(--text-primary)]">
+                显示分组筛选
+              </span>
+              <span className="mt-1 block text-[11px] text-[var(--text-tertiary)]">
+                根据后端节点分组生成首页 Tab。
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              checked={draftShowGroupTabs}
+              onChange={(event) => setDraftShowGroupTabs(event.target.checked)}
+              className="h-4 w-4 shrink-0 accent-[var(--accent-500)]"
+            />
+          </label>
+          <label className="surface-inset flex items-center justify-between gap-3 px-4 py-3">
+            <span className="min-w-0">
+              <span className="block text-[13px] font-medium text-[var(--text-primary)]">
+                离线节点后移
+              </span>
+              <span className="mt-1 block text-[11px] text-[var(--text-tertiary)]">
+                当前分组内在线优先，离线排到后方。
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              checked={draftMoveOfflineNodesBack}
+              onChange={(event) => setDraftMoveOfflineNodesBack(event.target.checked)}
+              className="h-4 w-4 shrink-0 accent-[var(--accent-500)]"
+            />
+          </label>
+        </div>
+      </InstancePanel>
+
+      <InstancePanel
         title="小卡片显示项"
         description="控制小卡片中间信息块的密度；实时速率始终显示，其他两项可以按需隐藏。"
         aside={<Rows3 size={16} />}
@@ -698,6 +811,10 @@ export function ThemeManage() {
             filteredTasks.map((task) => {
               const assigned = draftBindings[String(task.id)] ?? [];
               const isExpanded = expandedTaskId === task.id;
+              const selectableVisibleCount = visibleClients.filter((client) => {
+                const assignedTaskId = getAssignedTaskId(draftBindings, client.uuid);
+                return !assignedTaskId || assignedTaskId === String(task.id);
+              }).length;
               return (
                 <section key={task.id} className="surface-inset px-4 py-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -732,6 +849,24 @@ export function ThemeManage() {
                     </div>
 
                     <div className="flex items-center gap-2">
+                      {isExpanded && (
+                        <button
+                          type="button"
+                          disabled={selectableVisibleCount === 0}
+                          onClick={() => {
+                            setDraftBindings((prev) =>
+                              applyAvailableClientAssignments(
+                                prev,
+                                task.id,
+                                visibleClients.map((client) => client.uuid),
+                              ),
+                            );
+                          }}
+                          className="theme-manage-button is-compact"
+                        >
+                          全选可用
+                        </button>
+                      )}
                       {assigned.length > 0 && (
                         <button
                           type="button"

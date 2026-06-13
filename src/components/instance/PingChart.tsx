@@ -40,9 +40,11 @@ function colorForTask(index: number) {
   return colors[index % colors.length];
 }
 
-function percentile(values: number[], ratio: number) {
-  if (values.length === 0) return null;
-  const sorted = [...values].sort((a, b) => a - b);
+// Caller passes an ascending-sorted array so min/max/p50/p99 all reuse one sort
+// instead of re-sorting (and instead of `Math.min(...values)`, which can throw
+// RangeError when spreading a large series).
+function percentileFromSorted(sorted: number[], ratio: number) {
+  if (sorted.length === 0) return null;
   const index = (sorted.length - 1) * ratio;
   const lower = Math.floor(index);
   const upper = Math.ceil(index);
@@ -183,16 +185,22 @@ export function PingChart({
 
   const yRange = useMemo<[number | null, number | null]>(() => {
     if (!chart) return [null, null];
-    const values = tasks
-      .flatMap((task, index) =>
-        visibleTaskIds.has(task.id)
-          ? ((chart[index + 1] as Array<number | null | undefined>) ?? [])
-          : [],
-      )
-      .filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value > 0);
-    if (values.length === 0) return [0, 100];
-    const min = Math.min(...values);
-    const max = Math.max(...values);
+    // Single-pass min/max — avoids allocating a flattened values array and the
+    // `Math.min(...values)` spread, which can throw RangeError on large series.
+    let min = Number.POSITIVE_INFINITY;
+    let max = Number.NEGATIVE_INFINITY;
+    for (let index = 0; index < tasks.length; index += 1) {
+      if (!visibleTaskIds.has(tasks[index].id)) continue;
+      const series = chart[index + 1] as Array<number | null | undefined> | undefined;
+      if (!series) continue;
+      for (const value of series) {
+        if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+          if (value < min) min = value;
+          if (value > max) max = value;
+        }
+      }
+    }
+    if (min === Number.POSITIVE_INFINITY) return [0, 100];
     if (min === max) {
       const pad = Math.max(5, min * 0.1);
       return [Math.max(0, min - pad), max + pad];
@@ -321,15 +329,16 @@ export function PingChart({
       const records = grouped.get(task.id) ?? [];
       const positives = records
         .filter((record) => record.value > 0)
-        .map((record) => record.value);
+        .map((record) => record.value)
+        .sort((a, b) => a - b);
       const latest = [...records].reverse().find((record) => record.value > 0)?.value ?? null;
       const avg = positives.length
         ? positives.reduce((sum, value) => sum + value, 0) / positives.length
         : null;
-      const min = positives.length ? Math.min(...positives) : null;
-      const max = positives.length ? Math.max(...positives) : null;
-      const p50 = percentile(positives, 0.5);
-      const p99 = percentile(positives, 0.99);
+      const min = positives.length ? positives[0] : null;
+      const max = positives.length ? positives[positives.length - 1] : null;
+      const p50 = percentileFromSorted(positives, 0.5);
+      const p99 = percentileFromSorted(positives, 0.99);
       const volatility = p50 && p50 > 0 && p99 ? p99 / p50 : null;
       const total = records.length;
       const lost = records.filter((record) => record.value <= 0).length;

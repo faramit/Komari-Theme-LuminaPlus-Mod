@@ -2,10 +2,12 @@ import { useCallback, useEffect, useSyncExternalStore } from "react";
 import {
   ensureStarted,
   getAllNodeMetaSnapshot,
+  getHomeNodeSummariesSnapshot,
   getNodeMetaSnapshot,
   getNodeMetricsSnapshot,
   getNodeTrafficTrendSnapshot,
   getVisibleNodeUuidsSnapshot,
+  subscribeHomeNodeSummaries,
   subscribeAllNodes,
   subscribeStoreStatus,
   subscribeVisibleNodeUuids,
@@ -13,6 +15,7 @@ import {
   subscribeToNodeMetrics,
   subscribeToNodeTrafficTrend,
   getStoreStatusSnapshot,
+  type HomeNodeSummary,
 } from "@/services/wsStore";
 import type { NodeInfo, NodeMetrics, TrafficTrendSample } from "@/types/komari";
 
@@ -73,12 +76,16 @@ export function useNodeTrafficTrend(
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
-export function useVisibleNodeUuids(): string[] {
+export function useVisibleNodeUuids(includeHidden = false): string[] {
   useEnsured();
+  const getSnapshot = useCallback(
+    () => getVisibleNodeUuidsSnapshot(includeHidden),
+    [includeHidden],
+  );
   return useSyncExternalStore(
     subscribeVisibleNodeUuids,
-    getVisibleNodeUuidsSnapshot,
-    getVisibleNodeUuidsSnapshot,
+    getSnapshot,
+    getSnapshot,
   );
 }
 
@@ -88,6 +95,15 @@ export function useAllNodeMeta(): NodeInfo[] {
     subscribeAllNodes,
     getAllNodeMetaSnapshot,
     getAllNodeMetaSnapshot,
+  );
+}
+
+export function useHomeNodeSummaries(): HomeNodeSummary[] {
+  useEnsured();
+  return useSyncExternalStore(
+    subscribeHomeNodeSummaries,
+    getHomeNodeSummariesSnapshot,
+    getHomeNodeSummariesSnapshot,
   );
 }
 

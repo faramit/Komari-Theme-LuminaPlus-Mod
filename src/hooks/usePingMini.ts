@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
+import { useAuth } from "@/hooks/useAuth";
 import { useVisibleNodeUuids } from "@/hooks/useNode";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { getPingOverview } from "@/services/api";
@@ -192,10 +193,22 @@ function buildAssignmentKey(selectedTaskByClient: Map<string, number>) {
     .join("|");
 }
 
+// Hard ceiling for a single overview request. The RPC transport self-limits to
+// ~30s, but the HTTP fallback (`apiGet`) has no timeout — without this guard a
+// hung fallback fetch never settles, so `pingRefreshInFlight` stays true and all
+// future polling is wedged. Racing each request guarantees the chain recovers.
+const PING_REQUEST_TIMEOUT_MS = 35_000;
+
+function withRequestTimeout(signal: AbortSignal | undefined, ms: number): AbortSignal {
+  const timeoutSignal = AbortSignal.timeout(ms);
+  return signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
+}
+
 async function buildOverviewMap(
   hours: number,
   clientUuids: string[],
   bindings: HomepagePingTaskBindings,
+  signal?: AbortSignal,
 ): Promise<PingOverviewMapResult> {
   const normalizedUuids = normalizeVisibleUuids(clientUuids);
   if (normalizedUuids.length === 0) {
@@ -220,10 +233,13 @@ async function buildOverviewMap(
   }
 
   const overviewResults = await Promise.allSettled(
-    selectedTaskIds.map(async (taskId) => ({
-      taskId,
-      overview: await getPingOverview(hours, taskId),
-    })),
+    selectedTaskIds.map(async (taskId) => {
+      const requestSignal = withRequestTimeout(signal, PING_REQUEST_TIMEOUT_MS);
+      return {
+        taskId,
+        overview: await getPingOverview(hours, taskId, { signal: requestSignal }),
+      };
+    }),
   );
 
   const itemsByTask = new Map<number, Map<string, PingOverviewItem>>();
@@ -289,6 +305,7 @@ let scheduledBindings: HomepagePingTaskBindings = {};
 let scheduledBindingsKey = stringifyBindings({});
 let pingRefreshInFlight = false;
 let pingRefreshTimer: number | null = null;
+let pingAbortController: AbortController | null = null;
 let activeConsumers = 0;
 const pingListeners = new Map<string, Set<Listener>>();
 
@@ -310,6 +327,13 @@ function stopPingPolling() {
   if (pingRefreshTimer != null) {
     window.clearTimeout(pingRefreshTimer);
     pingRefreshTimer = null;
+  }
+  // Abort the in-flight refresh (if any) so its requests and bandwidth are
+  // released immediately on teardown; refreshPingOverview treats an aborted
+  // signal as non-current and skips committing/rescheduling.
+  if (pingAbortController) {
+    pingAbortController.abort();
+    pingAbortController = null;
   }
 }
 
@@ -395,6 +419,15 @@ async function refreshPingOverview() {
   pingRefreshInFlight = true;
   const visibleKey = scheduledVisibleKey;
   const bindingsKey = scheduledBindingsKey;
+  const controller = new AbortController();
+  pingAbortController = controller;
+  const { signal } = controller;
+  // True if a still-current request applies (not aborted by stopPingPolling and
+  // the visible/binding assignment hasn't changed underneath us).
+  const isCurrent = () =>
+    !signal.aborted &&
+    visibleKey === scheduledVisibleKey &&
+    bindingsKey === scheduledBindingsKey;
 
   try {
     if (scheduledVisibleUuids.length === 0) {
@@ -406,26 +439,28 @@ async function refreshPingOverview() {
       1,
       scheduledVisibleUuids,
       scheduledBindings,
+      signal,
     );
-    if (
-      visibleKey === scheduledVisibleKey &&
-      bindingsKey === scheduledBindingsKey
-    ) {
+    if (isCurrent()) {
       commitPingOverview(next.assignmentKey, next.intervalMs, next.items);
       schedulePingRefresh(next.intervalMs);
     }
   } catch {
-    if (
-      visibleKey === scheduledVisibleKey &&
-      bindingsKey === scheduledBindingsKey
-    ) {
+    if (isCurrent()) {
       schedulePingRefresh(DEFAULT_PING_REFRESH_INTERVAL);
     }
   } finally {
     pingRefreshInFlight = false;
+    if (pingAbortController === controller) pingAbortController = null;
+    // Resume whenever consumers still want polling but nothing is queued. This
+    // covers an assignment change mid-flight (the run above skipped its commit)
+    // and the abort/remount race (e.g. StrictMode: mount→stop(abort)→mount),
+    // where the aborted run must not be the one to reschedule. A successful or
+    // failed run already set a timer, so this stays a no-op in the steady state.
     if (
-      visibleKey !== scheduledVisibleKey ||
-      bindingsKey !== scheduledBindingsKey
+      activeConsumers > 0 &&
+      scheduledVisibleUuids.length > 0 &&
+      pingRefreshTimer == null
     ) {
       void refreshPingOverview();
     }
@@ -489,7 +524,8 @@ function getPingSnapshot(uuid: string) {
 }
 
 export function useHomepagePingOverview() {
-  const visibleUuids = useVisibleNodeUuids();
+  const { data: me } = useAuth();
+  const visibleUuids = useVisibleNodeUuids(me?.logged_in === true);
   const themeSettings = useThemeSettings();
 
   useEffect(() => {

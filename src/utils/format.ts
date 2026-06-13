@@ -30,7 +30,7 @@ export function joinDisplayParts(parts: Array<string | null | undefined>) {
 }
 
 export function formatBytes(n: number | undefined | null, decimals = 2): string {
-  if (!n || n < 0) return "0 B";
+  if (!n || n < 0 || !Number.isFinite(n)) return "0 B";
   let idx = 0;
   let v = n;
   while (v >= 1024 && idx < UNITS.length - 1) {

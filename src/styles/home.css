@@ -1,0 +1,183 @@
+.home-overview {
+  display: grid;
+  grid-template-columns:
+    minmax(120px, 1fr)
+    minmax(112px, 0.9fr)
+    minmax(112px, 0.9fr)
+    minmax(132px, 1fr)
+    minmax(132px, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  min-height: 74px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--border-strong) 42%, transparent);
+  border-radius: 18px;
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--surface) 98%, white 2%) 0%,
+      color-mix(in srgb, var(--surface-elev) 94%, var(--surface) 6%) 100%
+    );
+  box-shadow:
+    0 18px 38px -32px rgba(0, 0, 0, 0.58),
+    inset 0 1px 0 color-mix(in srgb, white 14%, transparent);
+  padding: 10px 18px;
+}
+
+.home-overview-item {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: var(--text-primary);
+  text-align: center;
+}
+
+.home-overview-item span {
+  color: color-mix(in srgb, var(--text-primary) 82%, var(--text-secondary));
+  font-size: 15px;
+  font-weight: 560;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.home-overview-item strong {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 720;
+  line-height: 1.18;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-overview-item.is-stack {
+  align-items: flex-start;
+  text-align: left;
+}
+
+.home-overview-item.is-stack span,
+.home-overview-item.is-stack strong {
+  width: 100%;
+}
+
+.home-group-tabs {
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+  border: 1px solid color-mix(in srgb, var(--border-strong) 54%, transparent);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow:
+    0 14px 30px -26px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 color-mix(in srgb, white 16%, transparent);
+  padding: 5px;
+}
+
+.home-group-tabs button {
+  display: inline-flex;
+  min-height: 32px;
+  max-width: 168px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  color: var(--text-secondary);
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.home-group-tabs button:hover {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--hover-bg) 72%, transparent);
+}
+
+.home-group-tabs button[data-active="true"] {
+  border-color: rgba(82, 82, 91, 0.28);
+  background:
+    linear-gradient(
+      180deg,
+      #ffffff 0%,
+      #f4f4f5 100%
+    );
+  box-shadow:
+    0 10px 22px -18px rgba(0, 0, 0, 0.34),
+    inset 0 0 0 1px rgba(82, 82, 91, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  color: #18181b;
+}
+
+[data-appearance="dark"] .home-group-tabs button[data-active="true"] {
+  border-color: rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(
+      180deg,
+      #18181b 0%,
+      #111113 100%
+    );
+  box-shadow:
+    0 10px 22px -18px rgba(0, 0, 0, 0.72),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  color: #e4e4e7;
+}
+
+@media (max-width: 900px) {
+  .home-overview {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .home-overview-item.is-stack {
+    align-items: center;
+    text-align: center;
+  }
+}
+
+@media (max-width: 560px) {
+  .home-overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border-radius: 16px;
+    padding: 10px 12px;
+  }
+
+  .home-overview-item span {
+    font-size: 12px;
+  }
+
+  .home-overview-item strong {
+    font-size: 13px;
+  }
+
+  .home-group-tabs {
+    width: 100%;
+    border-radius: 14px;
+  }
+
+  .home-group-tabs button {
+    min-height: 30px;
+    max-width: 136px;
+    padding: 0 10px;
+    font-size: 11px;
+  }
+}

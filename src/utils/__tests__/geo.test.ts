@@ -34,4 +34,16 @@ describe("getCountryCodeFromRegion", () => {
     expect(getCountryCodeFromRegion(null)).toBeNull();
     expect(getDisplayRegionCode("totally-unknown-place")).toBe("UN");
   });
+
+  it("rejects stray 2-letter words that are not real ISO codes (regression)", () => {
+    // "GO" is a word, not a country code → must not resolve to a bogus flag.
+    expect(getCountryCodeFromRegion("GO Cloud")).toBeNull();
+    expect(getDisplayRegionCode("GO Cloud")).toBe("UN");
+  });
+
+  it("still resolves a valid embedded code, even after a stray token", () => {
+    expect(getCountryCodeFromRegion("SE Stockholm")).toBe("SE");
+    // first token invalid (GO), second valid (HK) → HK wins
+    expect(getCountryCodeFromRegion("GO HK")).toBe("HK");
+  });
 });

@@ -92,10 +92,15 @@ function getRecordsMaxCount(hours: number, recordsPerHour: number) {
   );
 }
 
-async function apiGet<T>(path: string, schema: z.ZodType<T>): Promise<T> {
+async function apiGet<T>(
+  path: string,
+  schema: z.ZodType<T>,
+  options?: { signal?: AbortSignal },
+): Promise<T> {
   const resp = await fetch(path, {
     credentials: "include",
     headers: { Accept: "application/json" },
+    signal: options?.signal,
   });
   if (!resp.ok) {
     throw new ApiRequestError(`Request ${path} failed: ${resp.status}`, resp.status, path);
@@ -114,8 +119,9 @@ async function rpcCall<T>(
   method: string,
   params: Record<string, unknown>,
   schema: z.ZodType<T>,
+  options?: { timeout?: number; signal?: AbortSignal },
 ): Promise<T> {
-  const payload = await getRpc2Client().call(method, params);
+  const payload = await getRpc2Client().call(method, params, options);
   const parsed = schema.safeParse(payload);
   if (!parsed.success) {
     throw new Error(
@@ -217,11 +223,13 @@ export async function getPublic(): Promise<PublicConfig> {
 
 export async function getNodesLatestStatus(
   uuids?: string[],
+  options?: { timeout?: number },
 ): Promise<Record<string, unknown>> {
   const payload = await rpcCall(
     "common:getNodesLatestStatus",
     uuids && uuids.length > 0 ? { uuids } : {},
     z.unknown(),
+    options,
   );
   return normalizeRpcLatestStatus(payload);
 }
@@ -326,6 +334,7 @@ export async function saveThemeSettings(
 export async function getPingOverview(
   hours = 1,
   taskId?: number,
+  options?: { signal?: AbortSignal },
 ): Promise<PingOverviewResponse> {
   try {
     const payload = await rpcCall(
@@ -337,11 +346,15 @@ export async function getPingOverview(
         maxCount: OVERVIEW_PING_MAX_COUNT,
       },
       RpcRecordsSchema,
+      { signal: options?.signal },
     );
     return normalizeRpcPingOverview(payload);
   } catch {
     if (!taskId) {
       throw new Error("Ping overview fallback requires a concrete task_id");
+    }
+    if (options?.signal?.aborted) {
+      throw options.signal.reason ?? new DOMException("Aborted", "AbortError");
     }
 
     const data = await apiGet(
@@ -352,6 +365,7 @@ export async function getPingOverview(
         tasks: z.array(PingTaskSchema).default([]),
         basic_info: z.array(PingBasicInfoSchema).default([]),
       }),
+      { signal: options?.signal },
     );
     return {
       count: data.count,

@@ -35,6 +35,7 @@ type PendingRequest = {
 
 type RpcCallOptions = {
   timeout?: number;
+  signal?: AbortSignal;
 };
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -63,6 +64,7 @@ class RPC2Client {
   private connectPromise: Promise<void> | null = null;
   private reconnectTimer: number | null = null;
   private heartbeatTimer: number | null = null;
+  private closed = false;
   private state: "disconnected" | "connecting" | "connected" | "reconnecting" | "error" =
     "disconnected";
 
@@ -95,9 +97,33 @@ class RPC2Client {
   }
 
   private autoConnect() {
+    if (this.closed) return;
     void this.connect().catch(() => {
       // HTTP fallback remains available even if the socket is unavailable.
     });
+  }
+
+  // Tear down all timers, the socket, and any pending requests. Used on HMR
+  // disposal so a stale client can't keep its heartbeat/reconnect loop running
+  // alongside the freshly-imported module.
+  close() {
+    this.closed = true;
+    this.stopHeartbeat();
+    if (this.reconnectTimer != null) {
+      window.clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.rejectPendingRequests(new Error("RPC2 client closed"));
+    if (this.ws) {
+      this.ws.onclose = null;
+      try {
+        this.ws.close();
+      } catch {
+        /* noop */
+      }
+      this.ws = null;
+    }
+    this.state = "disconnected";
   }
 
   private async connect(): Promise<void> {
@@ -206,6 +232,11 @@ class RPC2Client {
       throw new Error("RPC2 WebSocket is not connected");
     }
 
+    const { signal } = options;
+    if (signal?.aborted) {
+      throw signal.reason ?? new DOMException("Aborted", "AbortError");
+    }
+
     const id = ++this.requestId;
     const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
     const request: JsonRpcRequest<TParams> = {
@@ -217,16 +248,42 @@ class RPC2Client {
 
     return await new Promise<TResult>((resolve, reject) => {
       const timeout = window.setTimeout(() => {
+        cleanup();
         this.pending.delete(id);
         reject(new Error(`RPC2 request timed out: ${method}`));
       }, timeoutMs);
 
-      this.pending.set(id, { resolve, reject, timeout });
+      const onAbort = () => {
+        cleanup();
+        this.pending.delete(id);
+        reject(signal?.reason ?? new DOMException("Aborted", "AbortError"));
+      };
+
+      const cleanup = () => {
+        window.clearTimeout(timeout);
+        signal?.removeEventListener("abort", onAbort);
+      };
+
+      signal?.addEventListener("abort", onAbort, { once: true });
+
+      // Wrap settle so a normal response (handled in handleMessage) or a
+      // transport-level rejection also detaches the abort listener and timer.
+      this.pending.set(id, {
+        resolve: (value) => {
+          cleanup();
+          resolve(value as TResult);
+        },
+        reject: (reason) => {
+          cleanup();
+          reject(reason);
+        },
+        timeout,
+      });
 
       try {
         this.ws?.send(JSON.stringify(request));
       } catch (error) {
-        window.clearTimeout(timeout);
+        cleanup();
         this.pending.delete(id);
         reject(error);
       }
@@ -240,6 +297,10 @@ class RPC2Client {
   ): Promise<TResult> {
     const id = ++this.requestId;
     const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
+    const timeoutSignal = AbortSignal.timeout(timeoutMs);
+    const signal = options.signal
+      ? AbortSignal.any([timeoutSignal, options.signal])
+      : timeoutSignal;
     const response = await fetch(this.baseUrl, {
       method: "POST",
       credentials: "include",
@@ -253,7 +314,7 @@ class RPC2Client {
         method,
         params,
       } satisfies JsonRpcRequest<TParams>),
-      signal: AbortSignal.timeout(timeoutMs),
+      signal,
     });
 
     if (!response.ok) {
@@ -294,7 +355,7 @@ class RPC2Client {
   }
 
   private scheduleReconnect() {
-    if (this.reconnectTimer) return;
+    if (this.closed || this.reconnectTimer) return;
 
     // Exponential backoff capped at MAX_RECONNECT_INTERVAL_MS, retried
     // indefinitely. The previous code stopped permanently after 5 attempts,
@@ -329,4 +390,17 @@ export function getRpc2Client() {
     rpc2Client = new RPC2Client();
   }
   return rpc2Client;
+}
+
+export function disposeRpc2Client() {
+  if (rpc2Client) {
+    rpc2Client.close();
+    rpc2Client = null;
+  }
+}
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    disposeRpc2Client();
+  });
 }

@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { calculateCostSummary } from "@/utils/cost";
+import {
+  calculateCostSummary,
+  formatCnyMoney,
+  normalizeCostIgnoredNodes,
+  normalizeCostRateApiUrl,
+  DEFAULT_COST_RATE_API_URL,
+} from "@/utils/cost";
 import type { NodeInfo } from "@/types/komari";
 
 const RATES = { USD: 1, CNY: 7 };
+const RATES_X = { USD: 1, EUR: 0.9, CNY: 7 };
 
 function node(overrides: Record<string, unknown>): NodeInfo {
   return {
@@ -74,5 +81,86 @@ describe("calculateCostSummary", () => {
       RATES,
     );
     expect(summary.totalCny).toBeCloseTo(70, 5);
+  });
+});
+
+describe("calculateCostSummary — annualized total & cycle validation", () => {
+  it("annualizes totalCny so total === sum(monthly) * 12 across mixed cycles", () => {
+    const summary = calculateCostSummary(
+      [
+        node({ uuid: "m", price: 10, currency: "USD", billing_cycle: "monthly" }),
+        node({ uuid: "y", name: "yearly", price: 120, currency: "$", billing_cycle: "annual" }),
+      ],
+      [],
+      RATES,
+    );
+    // monthly: 70/mo ; yearly: 840/yr = 70/mo → 140/mo total → 1680/yr
+    expect(summary.monthlyCny).toBeCloseTo(140, 6);
+    expect(summary.totalCny).toBeCloseTo(1680, 6);
+    expect(summary.totalCny).toBeCloseTo(summary.monthlyCny * 12, 6);
+  });
+
+  it("converts via cross rates (EUR -> CNY)", () => {
+    const summary = calculateCostSummary(
+      [node({ uuid: "e", price: 10, currency: "€", billing_cycle: "monthly" })],
+      [],
+      RATES_X,
+    );
+    expect(summary.monthlyCny).toBeCloseTo((10 / 0.9) * 7, 6);
+    expect(summary.totalCny).toBeCloseTo((10 / 0.9) * 7 * 12, 6);
+  });
+
+  it("skips nodes whose currency has no rate", () => {
+    const summary = calculateCostSummary(
+      [node({ uuid: "jpy", price: 1000, currency: "JPY", billing_cycle: "monthly" })],
+      [],
+      RATES,
+    );
+    expect(summary.skippedCount).toBe(1);
+    expect(summary.paidCount).toBe(0);
+    expect(summary.totalCny).toBe(0);
+  });
+
+  it("falls back to a yearly cycle for invalid billing_cycle numerics", () => {
+    const summary = calculateCostSummary(
+      [
+        node({ uuid: "zero", price: 120, currency: "USD", billing_cycle: 0 }),
+        node({ uuid: "neg", name: "neg", price: 120, currency: "USD", billing_cycle: -7 }),
+      ],
+      [],
+      RATES,
+    );
+    for (const detail of summary.details) {
+      expect(detail.billingCycleDays).toBe(365);
+    }
+    expect(summary.monthlyCny).toBeCloseTo(140, 6);
+  });
+
+  it("keeps lifetime (-1) purchases out of recurring totals", () => {
+    const summary = calculateCostSummary(
+      [node({ uuid: "life", price: 99, currency: "USD", billing_cycle: "lifetime" })],
+      [],
+      RATES,
+    );
+    expect(summary.details[0]?.billingCycleDays).toBe(-1);
+    expect(summary.monthlyCny).toBe(0);
+    expect(summary.totalCny).toBe(0);
+  });
+});
+
+describe("cost helpers", () => {
+  it("normalizeCostIgnoredNodes splits, trims and dedupes", () => {
+    expect(normalizeCostIgnoredNodes("a, b；b\nc")).toEqual(["a", "b", "c"]);
+    expect(normalizeCostIgnoredNodes(["x", "", " y "])).toEqual(["x", "y"]);
+  });
+
+  it("normalizeCostRateApiUrl falls back to the default", () => {
+    expect(normalizeCostRateApiUrl("")).toBe(DEFAULT_COST_RATE_API_URL);
+    expect(normalizeCostRateApiUrl("  https://x  ")).toBe("https://x");
+  });
+
+  it("formatCnyMoney guards NaN and formats two decimals", () => {
+    expect(formatCnyMoney(1234.5)).toBe("¥ 1,234.50");
+    expect(formatCnyMoney(Number.NaN)).toBe("¥ 0.00");
   });
 });

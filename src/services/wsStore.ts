@@ -17,6 +17,19 @@ export interface StoreStatusSnapshot {
   failureStreak: number;
 }
 
+export interface HomeNodeSummary {
+  uuid: string;
+  group: string;
+  region: string;
+  hidden: boolean;
+  weight: number;
+  online: boolean | null;
+  trafficUp: number;
+  trafficDown: number;
+  netUp: number;
+  netDown: number;
+}
+
 interface TrafficTrendSeries {
   buffer: TrafficTrendSample[];
   start: number;
@@ -36,6 +49,10 @@ interface NodeTrafficTrend {
 
 const LIVE_STATUS_REFRESH_INTERVAL_MS = 2_000;
 const NODE_INFO_REFRESH_INTERVAL_MS = 30_000;
+// The live poll fires every 2s; cap a single request well below the RPC's 30s
+// default so a half-open socket fails fast (surfacing failureStreak and letting
+// the next tick retry) instead of freezing live updates for up to a minute.
+const LIVE_STATUS_REQUEST_TIMEOUT_MS = 8_000;
 const SCROLL_IDLE_DELAY_MS = 160;
 const TRAFFIC_TREND_SAMPLE_COUNT = 18;
 const EMPTY_TRAFFIC_TREND_SAMPLE: TrafficTrendSample = {
@@ -125,6 +142,75 @@ function mergeNodeInfo(info: NodeInfo): NodeInfo {
   return { ...info };
 }
 
+interface TrafficTotalDirectionState {
+  raw: number;
+  offset: number;
+}
+
+type TrafficTotalState = Record<
+  string,
+  {
+    up: TrafficTotalDirectionState;
+    down: TrafficTotalDirectionState;
+  }
+>;
+
+let trafficTotalState: TrafficTotalState = {};
+
+function resolveTrafficTotalDirection(
+  previousDisplay: number,
+  rawValue: number,
+  prevState: TrafficTotalDirectionState | undefined,
+): { state: TrafficTotalDirectionState; display: number } {
+  const raw = Number.isFinite(rawValue) && rawValue > 0 ? rawValue : 0;
+  const previous = Number.isFinite(previousDisplay) && previousDisplay > 0 ? previousDisplay : 0;
+
+  if (!prevState) {
+    const display = Math.max(previous, raw);
+    return {
+      state: { raw, offset: Math.max(0, display - raw) },
+      display,
+    };
+  }
+
+  const offset =
+    raw >= prevState.raw
+      ? prevState.offset
+      : Math.max(previous, prevState.offset + prevState.raw);
+  const display = Math.max(previous, offset + raw);
+
+  return {
+    state: { raw, offset },
+    display,
+  };
+}
+
+function resolveTrafficTotals(
+  uuid: string,
+  previous: NodeMetrics,
+  nextUp: number,
+  nextDown: number,
+) {
+  const prevState = trafficTotalState[uuid];
+  const up = resolveTrafficTotalDirection(previous.trafficUp, nextUp, prevState?.up);
+  const down = resolveTrafficTotalDirection(previous.trafficDown, nextDown, prevState?.down);
+
+  if (
+    !prevState ||
+    prevState.up.raw !== up.state.raw ||
+    prevState.up.offset !== up.state.offset ||
+    prevState.down.raw !== down.state.raw ||
+    prevState.down.offset !== down.state.offset
+  ) {
+    trafficTotalState = {
+      ...trafficTotalState,
+      [uuid]: { up: up.state, down: down.state },
+    };
+  }
+
+  return { up: up.display, down: down.display };
+}
+
 function mergeRealtime(
   meta: NodeInfo,
   metrics: NodeMetrics,
@@ -138,6 +224,12 @@ function mergeRealtime(
   const diskUsed = rt.disk?.used ?? 0;
   const diskTotal = rt.disk?.total ?? metrics.diskTotal ?? meta.disk_total;
   const updatedAt = toTimestamp(rt.updated_at);
+  const trafficTotals = resolveTrafficTotals(
+    meta.uuid,
+    metrics,
+    rt.network?.totalUp ?? 0,
+    rt.network?.totalDown ?? 0,
+  );
 
   return {
     online,
@@ -153,8 +245,8 @@ function mergeRealtime(
     diskPct: diskTotal > 0 ? (diskUsed / diskTotal) * 100 : 0,
     netUp: rt.network?.up ?? 0,
     netDown: rt.network?.down ?? 0,
-    trafficUp: rt.network?.totalUp ?? 0,
-    trafficDown: rt.network?.totalDown ?? 0,
+    trafficUp: trafficTotals.up,
+    trafficDown: trafficTotals.down,
     uptime: rt.uptime ?? 0,
     load1: rt.load?.load1 ?? 0,
     load5: rt.load?.load5 ?? 0,
@@ -323,12 +415,20 @@ function updateTrafficTrendSeries(
 let state: State = emptyState();
 const visibleNodeListeners = new Set<Listener>();
 const allNodesListeners = new Set<Listener>();
+const homeNodeSummaryListeners = new Set<Listener>();
 const storeStatusListeners = new Set<Listener>();
 const nodeMetaListeners = new Map<string, Set<Listener>>();
 const nodeMetricsListeners = new Map<string, Set<Listener>>();
 const trafficTrendListeners = new Map<string, Set<Listener>>();
+let storeVersion = 0;
 let visibleNodeUuidsSnapshot: string[] = [];
+let visibleNodeUuidsSnapshotVersion = -1;
+let visibleNodeUuidsWithHiddenSnapshot: string[] = [];
+let visibleNodeUuidsWithHiddenSnapshotVersion = -1;
 let allNodeMetaSnapshot: NodeInfo[] = [];
+let allNodeMetaSnapshotVersion = -1;
+let homeNodeSummariesSnapshot: HomeNodeSummary[] = [];
+let homeNodeSummariesSnapshotVersion = -1;
 let storeStatusSnapshot: StoreStatusSnapshot = { failureStreak: 0 };
 let scrollIdleTimer: number | null = null;
 let scrollTrackingStarted = false;
@@ -360,9 +460,20 @@ function emitMappedListeners(
 
 function commit(next: State, touches: CommitTouches = {}) {
   state = next;
+  // Bumped on every state transition. Derived-list snapshots key their cache on
+  // it so the getSnapshot functions (called on every React render) can return a
+  // cached reference in O(1) when no commit has happened since the last call.
+  storeVersion += 1;
+  const homeTouched = Boolean(
+    touches.nodeList ||
+      touches.allNodes ||
+      touches.meta ||
+      touches.metrics,
+  );
 
   if (touches.nodeList) emitListeners(visibleNodeListeners);
   if (touches.allNodes) emitListeners(allNodesListeners);
+  if (homeTouched) emitListeners(homeNodeSummaryListeners);
   if (touches.storeStatus) emitListeners(storeStatusListeners);
   if (touches.meta) {
     emitMappedListeners(nodeMetaListeners, touches.meta);
@@ -532,8 +643,12 @@ function normalizeRealtime(
 function applyLatestStatus(records: Record<string, unknown>) {
   const touchedMetrics = new Set<string>();
   const touchedTrafficTrends = new Set<string>();
-  const nextMetricsByUuid: Record<string, NodeMetrics> = { ...state.metricsByUuid };
-  const nextTrafficTrends: Record<string, NodeTrafficTrend> = { ...state.trafficTrends };
+  // Clone the maps lazily — a quiet tick (no metric/trend change) is common, and
+  // the caller discards an unchanged map, so spreading up front is pure churn.
+  // After syncNodeInfo every order uuid already has a trend entry, so there is
+  // nothing to backfill for unchanged nodes.
+  let nextMetricsByUuid = state.metricsByUuid;
+  let nextTrafficTrends = state.trafficTrends;
 
   for (const uuid of state.order) {
     const meta = state.metaByUuid[uuid];
@@ -547,6 +662,9 @@ function applyLatestStatus(records: Record<string, unknown>) {
       : { ...prev, online };
 
     if (!shallowEqualMetrics(prev, merged)) {
+      if (nextMetricsByUuid === state.metricsByUuid) {
+        nextMetricsByUuid = { ...state.metricsByUuid };
+      }
       nextMetricsByUuid[uuid] = merged;
       touchedMetrics.add(uuid);
     }
@@ -566,6 +684,9 @@ function applyLatestStatus(records: Record<string, unknown>) {
     );
 
     if (nextUp.changed || nextDown.changed) {
+      if (nextTrafficTrends === state.trafficTrends) {
+        nextTrafficTrends = { ...state.trafficTrends };
+      }
       nextTrafficTrends[uuid] = {
         up: nextUp.series,
         down: nextDown.series,
@@ -575,8 +696,6 @@ function applyLatestStatus(records: Record<string, unknown>) {
         },
       };
       touchedTrafficTrends.add(uuid);
-    } else if (!(uuid in nextTrafficTrends)) {
-      nextTrafficTrends[uuid] = prevTrend;
     }
   }
 
@@ -654,6 +773,16 @@ async function syncNodeInfo(force = false) {
     const trafficTrends = Object.fromEntries(
       order.map((uuid) => [uuid, state.trafficTrends[uuid] ?? EMPTY_TRAFFIC_TREND]),
     );
+
+    // Drop monotonic-total bookkeeping for nodes that no longer exist so the
+    // module-level map can't grow unbounded across the session.
+    if (Object.keys(trafficTotalState).some((uuid) => !nextUuids.has(uuid))) {
+      const prunedTotals: TrafficTotalState = {};
+      for (const [uuid, totals] of Object.entries(trafficTotalState)) {
+        if (nextUuids.has(uuid)) prunedTotals[uuid] = totals;
+      }
+      trafficTotalState = prunedTotals;
+    }
     const nodeListChanged =
       orderChanged ||
       [...touchedMeta].some((uuid) => {
@@ -708,7 +837,9 @@ async function refreshLatestStatus() {
 
   refreshInFlight = true;
   try {
-    const records = await getNodesLatestStatus([...state.order]);
+    const records = await getNodesLatestStatus([...state.order], {
+      timeout: LIVE_STATUS_REQUEST_TIMEOUT_MS,
+    });
     const applied = applyLatestStatus(records);
     const metricsChanged = applied.touchedMetrics.length > 0;
     const trafficTrendsChanged = applied.touchedTrafficTrends.length > 0;
@@ -747,7 +878,6 @@ async function refreshLatestStatus() {
 async function bootstrap() {
   try {
     await hydrate();
-    await syncNodeInfo();
     await refreshLatestStatus();
   } catch {
     // Retry on the next scheduled tick.
@@ -755,15 +885,52 @@ async function bootstrap() {
 }
 
 let started = false;
+let liveStatusTimer: number | null = null;
+let nodeInfoTimer: number | null = null;
+
 export function ensureStarted() {
   if (started) return;
   started = true;
 
   ensureScrollTrackingStarted();
   void bootstrap();
-  window.setInterval(() => {
-    void bootstrap();
+  // Two independent cadences: live metrics every 2s, and node list/meta sync on
+  // its own 30s cadence. Previously these shared one awaited chain, so the tick
+  // that ran the slow /api/nodes fetch stalled that cycle's live refresh.
+  liveStatusTimer = window.setInterval(() => {
+    // Until the first hydrate succeeds there is no node list to poll, so keep
+    // retrying bootstrap on the fast cadence (matching the old single-chain
+    // behaviour); switch to pure live refresh once hydrated.
+    if (!hydrated) {
+      void bootstrap();
+      return;
+    }
+    void refreshLatestStatus();
   }, LIVE_STATUS_REFRESH_INTERVAL_MS);
+  nodeInfoTimer = window.setInterval(() => {
+    void syncNodeInfo();
+  }, NODE_INFO_REFRESH_INTERVAL_MS);
+}
+
+export function stopStore() {
+  if (liveStatusTimer != null) {
+    window.clearInterval(liveStatusTimer);
+    liveStatusTimer = null;
+  }
+  if (nodeInfoTimer != null) {
+    window.clearInterval(nodeInfoTimer);
+    nodeInfoTimer = null;
+  }
+  if (scrollIdleTimer != null) {
+    window.clearTimeout(scrollIdleTimer);
+    scrollIdleTimer = null;
+  }
+  if (scrollTrackingStarted) {
+    window.removeEventListener("scroll", markScrollActivity);
+    scrollTrackingStarted = false;
+  }
+  scrollActive = false;
+  started = false;
 }
 
 function subscribeSet(listeners: Set<Listener>, listener: Listener): () => void {
@@ -779,6 +946,10 @@ export function subscribeVisibleNodeUuids(listener: Listener): () => void {
 
 export function subscribeAllNodes(listener: Listener): () => void {
   return subscribeSet(allNodesListeners, listener);
+}
+
+export function subscribeHomeNodeSummaries(listener: Listener): () => void {
+  return subscribeSet(homeNodeSummaryListeners, listener);
 }
 
 export function subscribeStoreStatus(listener: Listener): () => void {
@@ -841,35 +1012,110 @@ export function getNodeTrafficTrendSnapshot(uuid: string): {
   return trend.snapshot;
 }
 
-export function getVisibleNodeUuidsSnapshot(): string[] {
-  const next = state.order.filter((uuid) => {
-    const node = state.metaByUuid[uuid];
-    return Boolean(node) && !node.hidden;
-  });
-
-  if (
-    next.length === visibleNodeUuidsSnapshot.length &&
-    next.every((uuid, index) => uuid === visibleNodeUuidsSnapshot[index])
-  ) {
+export function getVisibleNodeUuidsSnapshot(includeHidden = false): string[] {
+  if (includeHidden) {
+    if (visibleNodeUuidsWithHiddenSnapshotVersion === storeVersion) {
+      return visibleNodeUuidsWithHiddenSnapshot;
+    }
+  } else if (visibleNodeUuidsSnapshotVersion === storeVersion) {
     return visibleNodeUuidsSnapshot;
   }
 
-  visibleNodeUuidsSnapshot = next;
-  return visibleNodeUuidsSnapshot;
+  const next = state.order.filter((uuid) => {
+    const node = state.metaByUuid[uuid];
+    return Boolean(node) && (includeHidden || !node.hidden);
+  });
+
+  const previous = includeHidden
+    ? visibleNodeUuidsWithHiddenSnapshot
+    : visibleNodeUuidsSnapshot;
+  const value =
+    next.length === previous.length && next.every((uuid, index) => uuid === previous[index])
+      ? previous
+      : next;
+
+  if (includeHidden) {
+    visibleNodeUuidsWithHiddenSnapshot = value;
+    visibleNodeUuidsWithHiddenSnapshotVersion = storeVersion;
+  } else {
+    visibleNodeUuidsSnapshot = value;
+    visibleNodeUuidsSnapshotVersion = storeVersion;
+  }
+  return value;
 }
 
 export function getAllNodeMetaSnapshot(): NodeInfo[] {
+  if (allNodeMetaSnapshotVersion === storeVersion) return allNodeMetaSnapshot;
+
   const next = state.order
     .map((uuid) => state.metaByUuid[uuid])
     .filter((node): node is NodeInfo => Boolean(node));
 
   if (
-    next.length === allNodeMetaSnapshot.length &&
-    next.every((node, index) => node === allNodeMetaSnapshot[index])
+    !(
+      next.length === allNodeMetaSnapshot.length &&
+      next.every((node, index) => node === allNodeMetaSnapshot[index])
+    )
   ) {
-    return allNodeMetaSnapshot;
+    allNodeMetaSnapshot = next;
+  }
+  allNodeMetaSnapshotVersion = storeVersion;
+  return allNodeMetaSnapshot;
+}
+
+export function getHomeNodeSummariesSnapshot(): HomeNodeSummary[] {
+  if (homeNodeSummariesSnapshotVersion === storeVersion) return homeNodeSummariesSnapshot;
+
+  const next = state.order
+    .map((uuid) => {
+      const meta = state.metaByUuid[uuid];
+      if (!meta) return null;
+      const metrics = state.metricsByUuid[uuid];
+      return {
+        uuid,
+        group: String(meta.group || "").trim(),
+        region: String(meta.region || "").trim(),
+        hidden: meta.hidden,
+        weight: meta.weight,
+        online: metrics?.online ?? null,
+        trafficUp: metrics?.trafficUp ?? 0,
+        trafficDown: metrics?.trafficDown ?? 0,
+        netUp: metrics?.netUp ?? 0,
+        netDown: metrics?.netDown ?? 0,
+      };
+    })
+    .filter((item): item is HomeNodeSummary => Boolean(item));
+
+  if (
+    next.length === homeNodeSummariesSnapshot.length &&
+    next.every((item, index) => {
+      const prev = homeNodeSummariesSnapshot[index];
+      return (
+        prev &&
+        prev.uuid === item.uuid &&
+        prev.group === item.group &&
+        prev.region === item.region &&
+        prev.hidden === item.hidden &&
+        prev.weight === item.weight &&
+        prev.online === item.online &&
+        prev.trafficUp === item.trafficUp &&
+        prev.trafficDown === item.trafficDown &&
+        prev.netUp === item.netUp &&
+        prev.netDown === item.netDown
+      );
+    })
+  ) {
+    homeNodeSummariesSnapshotVersion = storeVersion;
+    return homeNodeSummariesSnapshot;
   }
 
-  allNodeMetaSnapshot = next;
-  return allNodeMetaSnapshot;
+  homeNodeSummariesSnapshot = next;
+  homeNodeSummariesSnapshotVersion = storeVersion;
+  return homeNodeSummariesSnapshot;
+}
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    stopStore();
+  });
 }

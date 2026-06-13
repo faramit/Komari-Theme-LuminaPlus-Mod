@@ -137,6 +137,9 @@ export interface ThemeSettings {
   enableAdminButton?: boolean;
   showPingChart?: boolean;
   homepagePingBindings?: Record<string, string[]>;
+  showHomeOverview?: boolean;
+  showGroupTabs?: boolean;
+  moveOfflineNodesBack?: boolean;
   showCostSummary?: boolean;
   compactShowTrafficTotal?: boolean;
   compactShowBilling?: boolean;

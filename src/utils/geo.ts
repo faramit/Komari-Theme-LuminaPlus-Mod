@@ -2,7 +2,22 @@ const REGIONAL_INDICATOR_MIN = 0x1f1e6;
 const REGIONAL_INDICATOR_MAX = 0x1f1ff;
 const ASCII_ALPHA_START = 0x41;
 const FLAG_EMOJI_RE = /[\u{1F1E6}-\u{1F1FF}]{2}/u;
-const ISO_CODE_RE = /\b[A-Z]{2}\b/;
+const ISO_CODE_RE = /\b[A-Z]{2}\b/g;
+
+// ISO-3166-1 alpha-2 (plus the few pseudo-codes the UI renders as flags) used to
+// validate a loose 2-letter token before accepting it — so free text like
+// "GO Cloud" or "MY Server"→"GO"/"MY" only resolves when the token is a real code.
+const ISO_3166_ALPHA2 = new Set(
+  (
+    "AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ " +
+    "CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET EU FI FJ FK FM " +
+    "FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT " +
+    "JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN " +
+    "MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT " +
+    "PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL " +
+    "TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW"
+  ).split(" "),
+);
 
 const REGION_ALIASES: Record<string, string> = {
   argentina: "AR",
@@ -164,12 +179,21 @@ export function getCountryCodeFromRegion(region: string | null | undefined): str
   if (aliased) return aliased;
 
   const upper = raw.toUpperCase();
+  // "UK" is a common non-ISO synonym for GB.
+  const resolveToken = (token: string) => (token === "UK" ? "GB" : token);
+  const isValidToken = (token: string) =>
+    token === "UK" || ISO_3166_ALPHA2.has(token);
+
   // Prefer a whole-string ISO code; only fall back to a token match for inputs
-  // like "DE Frankfurt" where the code is embedded in free text.
-  const iso = upper.match(/^[A-Z]{2}$/)?.[0] ?? upper.match(ISO_CODE_RE)?.[0];
-  if (iso) {
-    if (iso === "UK") return "GB";
-    return iso;
+  // like "DE Frankfurt" where the code is embedded in free text. Both paths must
+  // be a real code so stray words ("GO Cloud") don't resolve to a bogus flag.
+  const whole = upper.match(/^[A-Z]{2}$/)?.[0];
+  if (whole && isValidToken(whole)) return resolveToken(whole);
+
+  ISO_CODE_RE.lastIndex = 0;
+  for (const match of upper.matchAll(ISO_CODE_RE)) {
+    const token = match[0];
+    if (isValidToken(token)) return resolveToken(token);
   }
 
   return null;

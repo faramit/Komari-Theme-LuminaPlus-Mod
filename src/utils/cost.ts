@@ -119,14 +119,21 @@ function currencyCode(value: unknown) {
   return CURRENCY_ALIASES[key] || (/^[A-Z]{3}$/.test(key) ? key : "");
 }
 
+// Only a positive day-count or the lifetime sentinel (-1) is meaningful; any
+// other numeric (0, negative, NaN) is treated as "unset" and falls back to a
+// yearly cycle so it can't silently distort the monthly/annual totals.
+function normalizeCycleNumeric(value: number): number {
+  return value > 0 || value === -1 ? value : 365;
+}
+
 function billingCycleDays(value: unknown): number {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "number" && Number.isFinite(value)) return normalizeCycleNumeric(value);
 
   const raw = String(value ?? "").trim();
   if (!raw) return 365;
 
   const numeric = Number(raw);
-  if (Number.isFinite(numeric)) return numeric;
+  if (Number.isFinite(numeric)) return normalizeCycleNumeric(numeric);
 
   const normalized = raw.toLowerCase();
   if (/^(monthly|month|mo|月|每月)$/.test(normalized)) return 30;
@@ -357,7 +364,10 @@ export function calculateCostSummary(
     const monthly = months > 0 ? converted / months : 0;
     const remaining = remainingCycleValue(converted, cycleDays, node.expired_at);
 
-    totalCny += converted;
+    // `totalCny` is the annualized spend (monthly × 12) so nodes on different
+    // billing cycles are summed on a comparable basis; lifetime/one-time nodes
+    // (monthly === 0) contribute nothing to the recurring total.
+    totalCny += monthly * 12;
     monthlyCny += monthly;
     remainingCny += remaining;
     paidCount += 1;

@@ -12,6 +12,9 @@ export interface ResolvedThemeSettings {
   enableAdminButton: boolean;
   showPingChart: boolean;
   homepagePingBindings: HomepagePingTaskBindings;
+  showHomeOverview: boolean;
+  showGroupTabs: boolean;
+  moveOfflineNodesBack: boolean;
   showCostSummary: boolean;
   compactShowTrafficTotal: boolean;
   compactShowBilling: boolean;
@@ -26,6 +29,9 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   enableAdminButton: true,
   showPingChart: true,
   homepagePingBindings: {},
+  showHomeOverview: true,
+  showGroupTabs: true,
+  moveOfflineNodesBack: true,
   showCostSummary: true,
   compactShowTrafficTotal: true,
   compactShowBilling: true,
@@ -75,6 +81,9 @@ export function normalizeThemeSettings(
     enableAdminButton: enabledUnlessFalse(settings?.enableAdminButton),
     showPingChart: enabledUnlessFalse(settings?.showPingChart),
     homepagePingBindings: normalizeHomepagePingTaskBindings(settings?.homepagePingBindings),
+    showHomeOverview: enabledUnlessFalse(settings?.showHomeOverview),
+    showGroupTabs: enabledUnlessFalse(settings?.showGroupTabs),
+    moveOfflineNodesBack: enabledUnlessFalse(settings?.moveOfflineNodesBack),
     showCostSummary: enabledUnlessFalse(settings?.showCostSummary),
     compactShowTrafficTotal: enabledUnlessFalse(settings?.compactShowTrafficTotal),
     compactShowBilling: enabledUnlessFalse(settings?.compactShowBilling),
