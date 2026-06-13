@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type uPlot from "uplot";
 
 // Shared chart palette. LoadChart keys colors by metric (cpu/memory/…) while
@@ -46,6 +46,14 @@ const LOAD_TIME_RANGE_OPTIONS: TimeRangeOption[] = [
   { label: "30 天", value: 720 },
 ];
 
+const PING_TIME_RANGE_OPTIONS: TimeRangeOption[] = [
+  { label: "1 小时", value: 1 },
+  { label: "4 小时", value: 4 },
+  { label: "1 天", value: 24 },
+  { label: "7 天", value: 168 },
+  { label: "30 天", value: 720 },
+];
+
 function formatRangeLabel(hours: number) {
   if (hours % 24 === 0) {
     const days = hours / 24;
@@ -83,6 +91,10 @@ export function buildLoadTimeRangeOptions(maxHours: number | null | undefined) {
   return buildHistoryRangeOptions(LOAD_TIME_RANGE_OPTIONS, maxHours, true);
 }
 
+export function buildPingTimeRangeOptions(maxHours: number | null | undefined) {
+  return buildHistoryRangeOptions(PING_TIME_RANGE_OPTIONS, maxHours, false);
+}
+
 const GRID_CHART_DEFAULT = { w: 420, h: 150 };
 const GRID_CHART_DESKTOP_MAX_WIDTH = 480;
 const GRID_CHART_TABLET_MAX_WIDTH = 560;
@@ -91,7 +103,7 @@ const GRID_CHART_TABLET_GUTTER = 100;
 const GRID_CHART_MOBILE_GUTTER = 56;
 const GRID_CHART_HEIGHT = 148;
 const WIDE_CHART_MIN_WIDTH = 300;
-const WIDE_CHART_MAX_WIDTH = 1280;
+const WIDE_CHART_MAX_WIDTH = 1720;
 const WIDE_CHART_GUTTER = 96;
 const WIDE_CHART_HEIGHT = 340;
 const WIDE_CHART_TABLET_HEIGHT = 300;
@@ -198,6 +210,7 @@ export function getChartTooltipPosition({
 }
 
 export function useResponsiveChartSize(mode: "grid" | "wide") {
+  const ref = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState(
     mode === "grid"
       ? GRID_CHART_DEFAULT
@@ -205,7 +218,7 @@ export function useResponsiveChartSize(mode: "grid" | "wide") {
   );
 
   useEffect(() => {
-    function computeSize(width: number): { w: number; h: number } {
+    function computeSize(viewportWidth: number, containerWidth?: number): { w: number; h: number } {
       // The grid width is a continuous (width - gutter) / N below its cap, so an
       // exact skip-if-unchanged never fires during a drag-resize and every rAF
       // frame rebuilds all 6 uPlot charts. Quantizing to a step collapses runs of
@@ -214,39 +227,43 @@ export function useResponsiveChartSize(mode: "grid" | "wide") {
 
       if (mode === "wide") {
         const height =
-          width < 720
+          viewportWidth < 720
             ? WIDE_CHART_MOBILE_HEIGHT
-            : width < 1024
+            : viewportWidth < 1024
               ? WIDE_CHART_TABLET_HEIGHT
               : WIDE_CHART_HEIGHT;
+        const measuredWidth =
+          typeof containerWidth === "number" && containerWidth > 0
+            ? containerWidth
+            : viewportWidth - WIDE_CHART_GUTTER;
         return {
-          w: Math.min(WIDE_CHART_MAX_WIDTH, Math.max(WIDE_CHART_MIN_WIDTH, q(width - WIDE_CHART_GUTTER))),
+          w: Math.min(WIDE_CHART_MAX_WIDTH, Math.max(WIDE_CHART_MIN_WIDTH, q(measuredWidth))),
           h: height,
         };
       }
 
-      if (width >= 1280) {
+      if (viewportWidth >= 1280) {
         return {
-          w: Math.min(GRID_CHART_DESKTOP_MAX_WIDTH, q((width - GRID_CHART_DESKTOP_GUTTER) / 3)),
+          w: Math.min(GRID_CHART_DESKTOP_MAX_WIDTH, q((viewportWidth - GRID_CHART_DESKTOP_GUTTER) / 3)),
           h: GRID_CHART_HEIGHT,
         };
       }
 
-      if (width >= 768) {
+      if (viewportWidth >= 768) {
         return {
-          w: Math.min(GRID_CHART_TABLET_MAX_WIDTH, q((width - GRID_CHART_TABLET_GUTTER) / 2)),
+          w: Math.min(GRID_CHART_TABLET_MAX_WIDTH, q((viewportWidth - GRID_CHART_TABLET_GUTTER) / 2)),
           h: GRID_CHART_HEIGHT,
         };
       }
 
       return {
-        w: Math.max(WIDE_CHART_MIN_WIDTH - 20, q(width - GRID_CHART_MOBILE_GUTTER)),
+        w: Math.max(WIDE_CHART_MIN_WIDTH - 20, q(viewportWidth - GRID_CHART_MOBILE_GUTTER)),
         h: 136,
       };
     }
 
     function apply() {
-      const next = computeSize(window.innerWidth);
+      const next = computeSize(window.innerWidth, ref.current?.clientWidth);
       // Skip the state update (and the uPlot teardown it triggers) when the
       // computed size is unchanged — resize fires far more often than the
       // breakpoint-bucketed dimensions actually change.
@@ -264,11 +281,19 @@ export function useResponsiveChartSize(mode: "grid" | "wide") {
 
     apply();
     window.addEventListener("resize", onResize);
+    const observer =
+      mode === "wide" && typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(onResize)
+        : null;
+    if (observer && ref.current) {
+      observer.observe(ref.current);
+    }
     return () => {
       if (frame != null) window.cancelAnimationFrame(frame);
       window.removeEventListener("resize", onResize);
+      observer?.disconnect();
     };
   }, [mode]);
 
-  return size;
+  return { ...size, ref };
 }

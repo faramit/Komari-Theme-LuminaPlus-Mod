@@ -6,7 +6,7 @@ import { usePingRecords } from "@/hooks/useRecords";
 import { InstancePanel } from "./InstancePanel";
 import {
   colorForSeries,
-  formatHourMinuteAxis,
+  createTimeAxisFormatter,
   formatTooltipTime,
   getChartTooltipPosition,
   toChartSeconds,
@@ -47,7 +47,7 @@ export function PingChart({
 }) {
   const { data, isLoading, refetch } = usePingRecords(uuid, hours, active);
   const { resolvedAppearance } = usePreferences();
-  const { w, h } = useResponsiveChartSize("wide");
+  const { w, h, ref: chartSizeRef } = useResponsiveChartSize("wide");
   const [hiddenTasks, setHiddenTasks] = useState<Set<number>>(new Set());
   const [connectNulls, setConnectNulls] = useState(false);
   const [cutPeak, setCutPeak] = useState(false);
@@ -216,7 +216,7 @@ export function PingChart({
           grid: { stroke: grid, width: 1 },
           ticks: { stroke: grid },
           size: 36,
-          values: formatHourMinuteAxis,
+          values: createTimeAxisFormatter(hours),
         },
         {
           stroke: text,
@@ -283,13 +283,13 @@ export function PingChart({
               left: position.left,
               top: position.top,
               rows,
-              time: formatTooltipTime(timestamp),
+              time: formatTooltipTime(timestamp, hours),
             });
           },
         ],
       },
     };
-  }, [chart, connectNulls, hiddenTasks, isDark, taskColors, taskIndexById, taskLabels, tasks, visibleTasks, yRange]);
+  }, [chart, connectNulls, hiddenTasks, hours, isDark, taskColors, taskIndexById, taskLabels, tasks, visibleTasks, yRange]);
 
   const options = useMemo<uPlot.Options | null>(
     () => (baseOptions ? { ...baseOptions, width: w, height: h } : null),
@@ -452,7 +452,7 @@ export function PingChart({
         })}
       </div>
 
-      <div className="instance-uplot-wrap is-large">
+      <div ref={chartSizeRef} className="instance-uplot-wrap is-large">
         {chart && options && visibleTasks.length > 0 ? (
           <>
             <UplotReact options={options} data={chart} />

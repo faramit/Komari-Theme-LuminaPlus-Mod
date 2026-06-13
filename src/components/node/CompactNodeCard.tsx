@@ -619,8 +619,8 @@ export const CompactNodeCard = memo(function CompactNodeCard({
     .slice(visibleTags.length)
     .map((tag) => tag.label)
     .join(" / ");
-  const showTrafficTotal = themeSettings.compactShowTrafficTotal;
-  const showBilling = themeSettings.compactShowBilling;
+  const showTrafficTotal = themeSettings.isReady && themeSettings.compactShowTrafficTotal;
+  const showBilling = themeSettings.isReady && themeSettings.compactShowBilling;
 
   return (
     <article className={clsx("compact-node-card", isOffline && "is-offline")}>

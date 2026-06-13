@@ -31,7 +31,7 @@ export function CostSummary() {
   const nodes = useAllNodeMeta();
   const themeSettings = useThemeSettings();
   const rateApiUrl = themeSettings.costRateApiUrl;
-  const enabled = themeSettings.showCostSummary && nodes.length > 0;
+  const enabled = themeSettings.isReady && themeSettings.showCostSummary && nodes.length > 0;
   const rateQuery = useQuery({
     queryKey: ["cost-rates", rateApiUrl],
     queryFn: () => getExchangeRates(rateApiUrl),

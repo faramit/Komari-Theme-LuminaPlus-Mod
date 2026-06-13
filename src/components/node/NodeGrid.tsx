@@ -13,6 +13,7 @@ import {
   sortHomeGroupOptions,
   sortHomeNodeSummaries,
 } from "@/utils/homeNodes";
+import { Spinner } from "@/components/ui/Spinner";
 import { CompactNodeCard } from "./CompactNodeCard";
 import { CostSummary } from "./CostSummary";
 import { NodeCard } from "./NodeCard";
@@ -167,16 +168,23 @@ export function NodeGrid() {
   );
   const overview = useMemo(() => buildHomeOverview(visibleNodes), [visibleNodes]);
   const groupOptions = useMemo(
-    () => sortHomeGroupOptions(getHomeGroupOptions(visibleNodes), themeSettings.homeGroupOrder),
-    [visibleNodes, themeSettings.homeGroupOrder],
+    () =>
+      sortHomeGroupOptions(
+        getHomeGroupOptions(visibleNodes),
+        themeSettings.isReady ? themeSettings.homeGroupOrder : [],
+      ),
+    [visibleNodes, themeSettings.homeGroupOrder, themeSettings.isReady],
   );
   const filteredNodes = useMemo(() => {
     const filtered =
       selectedGroup === HOME_ALL_GROUP
         ? visibleNodes
         : visibleNodes.filter((node) => getHomeGroupLabel(node.group) === selectedGroup);
-    return sortHomeNodeSummaries(filtered, themeSettings.moveOfflineNodesBack);
-  }, [visibleNodes, selectedGroup, themeSettings.moveOfflineNodesBack]);
+    return sortHomeNodeSummaries(
+      filtered,
+      themeSettings.isReady && themeSettings.moveOfflineNodesBack,
+    );
+  }, [visibleNodes, selectedGroup, themeSettings.isReady, themeSettings.moveOfflineNodesBack]);
 
   useEffect(() => {
     if (selectedGroup !== HOME_ALL_GROUP && !groupOptions.includes(selectedGroup)) {
@@ -201,13 +209,23 @@ export function NodeGrid() {
       </div>
     ));
   }, [uuidsKey, mode]);
-  const showGroupTabs = themeSettings.showGroupTabs && groupOptions.length > 0;
+  const showHomeOverview = themeSettings.isReady && themeSettings.showHomeOverview;
+  const showGroupTabs =
+    themeSettings.isReady && themeSettings.showGroupTabs && groupOptions.length > 0;
+
+  if (!themeSettings.isReady) {
+    return (
+      <div className="flex h-[40vh] items-center justify-center">
+        <Spinner size={24} />
+      </div>
+    );
+  }
 
   if (visibleNodes.length === 0) {
     return (
       <>
         <CostSummary />
-        {themeSettings.showHomeOverview && <HomeOverviewBar overview={overview} />}
+        {showHomeOverview && <HomeOverviewBar overview={overview} />}
         <div className="flex h-[40vh] flex-col items-center justify-center gap-2 text-[var(--text-tertiary)]">
           <span className="text-[15px]">尚未连接到任何节点</span>
           <span className="text-[12px]">等待后端推送或前往管理后台添加</span>
@@ -219,7 +237,7 @@ export function NodeGrid() {
   return (
     <>
       <CostSummary />
-      {themeSettings.showHomeOverview && <HomeOverviewBar overview={overview} />}
+      {showHomeOverview && <HomeOverviewBar overview={overview} />}
       {showGroupTabs && (
         <GroupTabs
           groups={groupOptions}

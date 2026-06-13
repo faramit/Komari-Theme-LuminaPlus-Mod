@@ -216,11 +216,12 @@ export function usePreferences() {
   const themeSettings = useThemeSettings();
 
   useEffect(() => {
+    if (!themeSettings.isReady) return;
     if (hasExplicitAppearancePreference) return;
     const defaultAppearance = themeSettings.defaultAppearance;
     persistDefaultAppearance(defaultAppearance);
     commit({ appearance: defaultAppearance });
-  }, [themeSettings.defaultAppearance]);
+  }, [themeSettings.defaultAppearance, themeSettings.isReady]);
 
   const setAppearance = useCallback((a: Appearance) => {
     hasExplicitAppearancePreference = true;

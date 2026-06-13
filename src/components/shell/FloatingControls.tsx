@@ -22,7 +22,8 @@ export function FloatingControls() {
   const { failureStreak } = useNodeStoreStatus();
   const [searchParams] = useSearchParams();
   const [collapsed, setCollapsed] = useState(true);
-  const showAdmin = themeSettings.enableAdminButton;
+  const settingsReady = themeSettings.isReady;
+  const showAdmin = settingsReady && themeSettings.enableAdminButton;
   const showThemeManage = Boolean(me?.logged_in);
   const isThemeManageView = searchParams.get("view") === "theme-manage";
   const showSyncWarning = failureStreak >= 2;
@@ -45,43 +46,47 @@ export function FloatingControls() {
       <div className="floating-controls-inner">
         <div className="floating-controls-row">
           <div className="floating-controls-actions" aria-hidden={collapsed}>
-            <div
-              className="control-group"
-              role="group"
-              aria-label="外观选择"
-            >
-              {APPEARANCE_OPTIONS.map(({ value, icon: Icon, label }) => (
+            {settingsReady && (
+              <>
+                <div
+                  className="control-group"
+                  role="group"
+                  aria-label="外观选择"
+                >
+                  {APPEARANCE_OPTIONS.map(({ value, icon: Icon, label }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setAppearance(value)}
+                      aria-label={label}
+                      aria-pressed={appearance === value}
+                      title={label}
+                      tabIndex={hiddenTabIndex}
+                      className={clsx(
+                        "control-button control-toggle grid h-9 w-9 place-items-center",
+                        appearance === value && "is-active",
+                      )}
+                    >
+                      <Icon size={16} />
+                    </button>
+                  ))}
+                </div>
                 <button
-                  key={value}
                   type="button"
-                  onClick={() => setAppearance(value)}
-                  aria-label={label}
-                  aria-pressed={appearance === value}
-                  title={label}
+                  onClick={toggleMode}
+                  aria-label="紧凑视图"
+                  aria-pressed={mode === "compact"}
+                  title={mode === "compact" ? "临时切换到大视图" : "临时切换到小视图"}
                   tabIndex={hiddenTabIndex}
                   className={clsx(
-                    "control-button control-toggle grid h-9 w-9 place-items-center",
-                    appearance === value && "is-active",
+                    "control-button grid h-9 w-9 place-items-center",
+                    mode === "compact" && "control-toggle is-active",
                   )}
                 >
-                  <Icon size={16} />
+                  <ViewIcon size={16} />
                 </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={toggleMode}
-              aria-label="紧凑视图"
-              aria-pressed={mode === "compact"}
-              title={mode === "compact" ? "临时切换到大视图" : "临时切换到小视图"}
-              tabIndex={hiddenTabIndex}
-              className={clsx(
-                "control-button grid h-9 w-9 place-items-center",
-                mode === "compact" && "control-toggle is-active",
-              )}
-            >
-              <ViewIcon size={16} />
-            </button>
+              </>
+            )}
             {showThemeManage && (
               <Link
                 to="/?view=theme-manage"

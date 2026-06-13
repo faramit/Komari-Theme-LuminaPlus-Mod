@@ -867,10 +867,15 @@ export function ThemeManage() {
             filteredTasks.map((task) => {
               const assigned = draftBindings[String(task.id)] ?? [];
               const isExpanded = expandedTaskId === task.id;
-              const selectableVisibleCount = visibleClients.filter((client) => {
+              const selectableVisibleClients = visibleClients.filter((client) => {
                 const assignedTaskId = getAssignedTaskId(draftBindings, client.uuid);
                 return !assignedTaskId || assignedTaskId === String(task.id);
-              }).length;
+              });
+              const unselectedVisibleClients = selectableVisibleClients.filter(
+                (client) => !assigned.includes(client.uuid),
+              );
+              const allVisibleSelectableAssigned =
+                selectableVisibleClients.length > 0 && unselectedVisibleClients.length === 0;
               return (
                 <section key={task.id} className="surface-inset px-4 py-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -908,19 +913,21 @@ export function ThemeManage() {
                       {isExpanded && (
                         <button
                           type="button"
-                          disabled={selectableVisibleCount === 0}
+                          disabled={
+                            selectableVisibleClients.length === 0 || allVisibleSelectableAssigned
+                          }
                           onClick={() => {
                             setDraftBindings((prev) =>
                               applyAvailableClientAssignments(
                                 prev,
                                 task.id,
-                                visibleClients.map((client) => client.uuid),
+                                selectableVisibleClients.map((client) => client.uuid),
                               ),
                             );
                           }}
                           className="theme-manage-button is-compact"
                         >
-                          全选可用
+                          {allVisibleSelectableAssigned ? "已全选可用" : "全选可用"}
                         </button>
                       )}
                       {assigned.length > 0 && (
