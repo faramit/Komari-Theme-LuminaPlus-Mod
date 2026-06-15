@@ -39,6 +39,10 @@ const LOAD_RECORDS_PER_HOUR = 12;
 const PING_RECORDS_PER_HOUR = 240;
 const MAX_RPC_RECORDS = 20_000;
 const OVERVIEW_PING_MAX_COUNT = 4_000;
+// Plain HTTP GETs (/api/nodes, /api/public, the load/ping fallbacks) have no
+// transport timeout of their own, so cap them here — a half-open socket should
+// fail fast instead of hanging the caller forever.
+const DEFAULT_API_TIMEOUT_MS = 12_000;
 
 interface RpcRecordsPayload {
   count?: number;
@@ -95,12 +99,16 @@ function getRecordsMaxCount(hours: number, recordsPerHour: number) {
 async function apiGet<T>(
   path: string,
   schema: z.ZodType<T>,
-  options?: { signal?: AbortSignal },
+  options?: { signal?: AbortSignal; timeout?: number },
 ): Promise<T> {
+  const timeoutSignal = AbortSignal.timeout(options?.timeout ?? DEFAULT_API_TIMEOUT_MS);
+  const signal = options?.signal
+    ? AbortSignal.any([timeoutSignal, options.signal])
+    : timeoutSignal;
   const resp = await fetch(path, {
     credentials: "include",
     headers: { Accept: "application/json" },
-    signal: options?.signal,
+    signal,
   });
   if (!resp.ok) {
     throw new ApiRequestError(`Request ${path} failed: ${resp.status}`, resp.status, path);
@@ -315,6 +323,7 @@ export async function saveThemeSettings(
       "Content-Type": "application/json",
     },
     body: JSON.stringify(settings),
+    signal: AbortSignal.timeout(DEFAULT_API_TIMEOUT_MS),
   });
 
   if (!resp.ok) {

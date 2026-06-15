@@ -18,6 +18,7 @@ export interface ResolvedThemeSettings {
   homeGroupOrder: string[];
   moveOfflineNodesBack: boolean;
   showCostSummary: boolean;
+  showCostSummaryFloatingButton: boolean;
   compactShowTrafficTotal: boolean;
   compactShowBilling: boolean;
   showConnections: boolean;
@@ -37,6 +38,7 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   homeGroupOrder: [],
   moveOfflineNodesBack: true,
   showCostSummary: true,
+  showCostSummaryFloatingButton: true,
   compactShowTrafficTotal: true,
   compactShowBilling: true,
   showConnections: false,
@@ -91,6 +93,7 @@ export function normalizeThemeSettings(
     homeGroupOrder: normalizeHomeGroupOrder(settings?.homeGroupOrder),
     moveOfflineNodesBack: enabledUnlessFalse(settings?.moveOfflineNodesBack),
     showCostSummary: enabledUnlessFalse(settings?.showCostSummary),
+    showCostSummaryFloatingButton: enabledUnlessFalse(settings?.showCostSummaryFloatingButton),
     compactShowTrafficTotal: enabledUnlessFalse(settings?.compactShowTrafficTotal),
     compactShowBilling: enabledUnlessFalse(settings?.compactShowBilling),
     // Default OFF (opt-in): connection counts are a niche metric and many agents

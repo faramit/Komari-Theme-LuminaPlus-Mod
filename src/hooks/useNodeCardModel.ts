@@ -4,13 +4,15 @@ import { usePingMini, usePingMiniBuckets } from "@/hooks/usePingMini";
 import { formatRenewalPrice } from "@/utils/billing";
 import { getExpireTextColor } from "@/utils/expireStatus";
 import {
+  formatBytes,
   formatExpireDays,
   formatTrafficRate,
   formatUptimeDays,
   joinDisplayParts,
   parseTags,
 } from "@/utils/format";
-import { latencyHeatColor, lossHeatColor } from "@/utils/metricTone";
+import { latencyHeatColor, lossHeatColor, trafficUsageColor } from "@/utils/metricTone";
+import { resolveTrafficUsage, trafficTypeLabel, type TrafficDisplay } from "@/utils/traffic";
 import { resolveOsInfo } from "@/components/ui/OsLogo";
 
 export function useNodeCardModel(uuid: string, pingBucketCount?: number) {
@@ -74,11 +76,35 @@ export function useNodeCardModel(uuid: string, pingBucketCount?: number) {
 
     const { loadBaseline } = metaModel;
 
+    // Traffic quota: reduce the cumulative up/down totals to "used" per the
+    // node's traffic_limit_type (matching the backend), then derive remaining and
+    // the usage fraction once here so both card layouts share the computation.
+    const trafficUsage = resolveTrafficUsage(
+      meta.traffic_limit_type,
+      metrics.trafficUp,
+      metrics.trafficDown,
+      meta.traffic_limit,
+    );
+    const trafficUsedLabel = formatBytes(trafficUsage.used);
+    // Unlimited renders as ∞ so the remaining value and the used/limit line stay
+    // parallel to the limited case ("剩余 ∞" + "2.73 GB / ∞").
+    const trafficLimitLabel = trafficUsage.unlimited ? "∞" : formatBytes(trafficUsage.limit);
+    const traffic: TrafficDisplay = {
+      fraction: trafficUsage.fraction,
+      color: trafficUsage.unlimited
+        ? "var(--status-success)"
+        : trafficUsageColor(trafficUsage.fraction),
+      remainingLabel: trafficUsage.unlimited ? "∞" : formatBytes(trafficUsage.remaining),
+      detail: `${trafficUsedLabel} / ${trafficLimitLabel}`,
+      typeLabel: trafficTypeLabel(meta.traffic_limit_type),
+    };
+
     return {
       node: { ...meta, ...metrics },
       trafficTrend,
       ping,
       pingBuckets,
+      traffic,
       ...metaModel,
       ...pingModel,
       uptime: formatUptimeDays(metrics.uptime),

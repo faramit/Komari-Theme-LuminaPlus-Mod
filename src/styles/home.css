@@ -1,79 +1,165 @@
+/* ===== Home overview cards ===== */
 .home-overview {
   display: grid;
-  grid-template-columns:
-    minmax(120px, 1fr)
-    minmax(112px, 0.9fr)
-    minmax(112px, 0.9fr)
-    minmax(132px, 1fr)
-    minmax(132px, 1fr);
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
-  min-height: 74px;
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--border-strong) 42%, transparent);
-  border-radius: 18px;
-  background:
-    linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--surface) 98%, white 2%) 0%,
-      color-mix(in srgb, var(--surface-elev) 94%, var(--surface) 6%) 100%
-    );
-  box-shadow:
-    0 18px 38px -32px rgba(0, 0, 0, 0.58),
-    inset 0 1px 0 color-mix(in srgb, white 14%, transparent);
-  padding: 10px 18px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
-.home-overview-item {
+.overview-card {
+  position: relative;
   display: flex;
   min-width: 0;
+  min-height: 112px;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  color: var(--text-primary);
-  text-align: center;
+  gap: 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 16px;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface-elev) 96%, white 4%) 0%,
+      var(--surface) 100%
+    );
+  box-shadow: var(--shadow-card);
+  padding: 14px 16px;
 }
 
-.home-overview-item span {
-  color: color-mix(in srgb, var(--text-primary) 82%, var(--text-secondary));
-  font-size: 15px;
-  font-weight: 560;
-  line-height: 1.2;
-  white-space: nowrap;
-}
-
-.home-overview-item strong {
-  display: block;
+.overview-card-head {
+  display: flex;
   min-width: 0;
-  max-width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.overview-card-label {
+  min-width: 0;
   overflow: hidden;
-  color: var(--text-primary);
-  font-size: 16px;
-  font-weight: 720;
-  line-height: 1.18;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.home-overview-item.is-stack {
-  align-items: flex-start;
-  text-align: left;
+.overview-card-action {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--border-strong) 42%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-elev) 72%, var(--surface));
+  color: var(--text-secondary);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 16%, transparent);
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
 }
 
-.home-overview-item.is-stack span,
-.home-overview-item.is-stack strong {
+.overview-card-action:hover {
+  border-color: color-mix(in srgb, var(--border-strong) 62%, transparent);
+  background: color-mix(in srgb, var(--hover-bg) 72%, var(--surface-elev));
+  color: var(--text-primary);
+}
+
+.overview-card-action:active {
+  transform: scale(0.94);
+}
+
+.overview-card-main {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.overview-card-value {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 4px;
+  color: var(--text-primary);
+  font-size: 28px;
+  font-weight: 760;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.overview-card-unit {
+  color: var(--text-tertiary);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.overview-card-sub {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 560;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Small bottom-right caption (e.g. the asset card's "实时汇率计算"). */
+.overview-card-caption {
+  margin-top: auto;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 500;
+  text-align: right;
+}
+
+/* Online bar: green (left) = online, red (right) = offline, the neutral track in
+   between = not-yet-known. Starting neutral (not red) avoids a red flash on first
+   paint before metrics arrive; green and red then grow in from both edges together.
+   The exact "12 / 14" count sits right above, so this is just a glanceable bar. */
+.overview-bar {
+  display: flex;
+  justify-content: space-between;
+  height: 6px;
   width: 100%;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--progress-bg);
+}
+
+.overview-bar-online,
+.overview-bar-offline {
+  height: 100%;
+  transition: width 320ms ease;
+}
+
+.overview-bar-online {
+  background: var(--status-success);
+}
+
+.overview-bar-offline {
+  background: color-mix(in srgb, var(--status-error) 70%, transparent);
 }
 
 .home-group-tabs {
   display: flex;
-  width: fit-content;
-  max-width: 100%;
+  /* Rendered inside a grid that mirrors the card grid (see NodeGrid), so it fills
+     exactly one card column and its edges line up with the first card. min-width:0
+     lets it shrink within that column so an overflowing tab set scrolls. */
+  min-width: 0;
   align-items: center;
   gap: 4px;
-  margin-bottom: 16px;
   overflow-x: auto;
   border: 1px solid color-mix(in srgb, var(--border-strong) 54%, transparent);
   border-radius: 16px;
@@ -86,8 +172,12 @@
 
 .home-group-tabs button {
   display: inline-flex;
+  /* Grow to share the bar width evenly when there's room, never shrink (so an
+     overflowing set scrolls rather than squishing). The cap keeps one long group
+     name from dominating while staying wide enough that 2 tabs still fill a card. */
+  flex: 1 0 auto;
   min-height: 32px;
-  max-width: 168px;
+  max-width: 240px;
   align-items: center;
   justify-content: center;
   overflow: hidden;
@@ -143,32 +233,30 @@
   color: #e4e4e7;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   .home-overview {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .home-overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
   }
 
-  .home-overview-item.is-stack {
-    align-items: center;
-    text-align: center;
+  .overview-card {
+    min-height: 100px;
+    border-radius: 14px;
+    padding: 12px 13px;
+  }
+
+  .overview-card-value {
+    font-size: 24px;
   }
 }
 
 @media (max-width: 560px) {
-  .home-overview {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    border-radius: 16px;
-    padding: 10px 12px;
-  }
-
-  .home-overview-item span {
-    font-size: 12px;
-  }
-
-  .home-overview-item strong {
-    font-size: 13px;
-  }
-
   .home-group-tabs {
     width: 100%;
     border-radius: 14px;
@@ -176,7 +264,7 @@
 
   .home-group-tabs button {
     min-height: 30px;
-    max-width: 136px;
+    max-width: 200px;
     padding: 0 10px;
     font-size: 11px;
   }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CircleDollarSign, RefreshCw, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAllNodeMeta } from "@/hooks/useNode";
@@ -24,14 +24,32 @@ function CostMetric({
   );
 }
 
-export function CostSummary() {
-  const [open, setOpen] = useState(false);
+interface CostSummaryProps {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  showLauncher?: boolean;
+}
+
+export function CostSummary({
+  open,
+  onOpenChange,
+  showLauncher = true,
+}: CostSummaryProps = {}) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const resolvedOpen = open ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
+  const panelRef = useRef<HTMLElement | null>(null);
+  const launcherRef = useRef<HTMLButtonElement | null>(null);
   const [sortBy, setSortBy] = useState("weight_asc");
-  const hiddenTabIndex = open ? undefined : -1;
+  const hiddenTabIndex = resolvedOpen ? undefined : -1;
   const nodes = useAllNodeMeta();
   const themeSettings = useThemeSettings();
   const rateApiUrl = themeSettings.costRateApiUrl;
-  const enabled = themeSettings.isReady && themeSettings.showCostSummary && nodes.length > 0;
+  // The parent (NodeGrid) decides whether to mount this and whether to show the
+  // launcher (showLauncher); here we only gate on data availability. Gating on
+  // showCostSummary would wrongly null out the whole component — and its floating
+  // launcher — whenever the card's inline detail button is turned off.
+  const enabled = themeSettings.isReady && nodes.length > 0;
   const rateQuery = useQuery({
     queryKey: ["cost-rates", rateApiUrl],
     queryFn: () => getExchangeRates(rateApiUrl),
@@ -83,6 +101,29 @@ export function CostSummary() {
     summary && summary.skippedCount > 0 ? `跳过 ${summary.skippedCount}` : "",
   ].filter(Boolean);
 
+  useEffect(() => {
+    if (!resolvedOpen) return;
+
+    const closeIfOutside = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (panelRef.current?.contains(target)) return;
+      if (launcherRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+
+    document.addEventListener("pointerdown", closeIfOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeIfOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [resolvedOpen, setOpen]);
+
   if (!enabled) {
     return null;
   }
@@ -90,9 +131,10 @@ export function CostSummary() {
   return (
     <>
       <section
-        className={`cost-summary-panel${open ? " show" : ""}`}
+        ref={panelRef}
+        className={`cost-summary-panel${resolvedOpen ? " show" : ""}`}
         aria-label="服务器花费"
-        aria-hidden={!open}
+        aria-hidden={!resolvedOpen}
       >
         <div className="cost-summary-header">
           <h3 className="cost-summary-title">
@@ -199,18 +241,21 @@ export function CostSummary() {
           </button>
         </div>
       </section>
-      <button
-        type="button"
-        className={`cost-summary-ball${open ? "" : " show"}`}
-        onClick={() => setOpen(true)}
-        aria-label="打开资产统计"
-        title="资产统计"
-        tabIndex={open ? -1 : undefined}
-      >
-        <span className="cost-summary-ball-icon" aria-hidden>
-          <CircleDollarSign size={16} />
-        </span>
-      </button>
+      {showLauncher && (
+        <button
+          ref={launcherRef}
+          type="button"
+          className={`cost-summary-ball${resolvedOpen ? "" : " show"}`}
+          onClick={() => setOpen(true)}
+          aria-label="打开资产统计"
+          title="资产统计"
+          tabIndex={resolvedOpen ? -1 : undefined}
+        >
+          <span className="cost-summary-ball-icon" aria-hidden>
+            <CircleDollarSign size={16} />
+          </span>
+        </button>
+      )}
     </>
   );
 }

@@ -8,6 +8,7 @@ import {
   CircleDollarSign,
   Clock3,
   Cpu,
+  Database,
   Download,
   Gauge,
   HardDrive,
@@ -36,6 +37,7 @@ import type {
   TrafficTrendSample,
 } from "@/types/komari";
 import type { TrafficRateDisplay } from "@/utils/format";
+import type { TrafficDisplay } from "@/utils/traffic";
 
 const TRAFFIC_DOT_COUNT = 16;
 const HEALTH_BAR_COUNT = 18;
@@ -543,6 +545,33 @@ function CompactNodeInfoStrip({
   );
 }
 
+// Mandatory traffic-quota bar: label + used / limit on one line (compact cards are
+// dense, so the remaining figure is dropped here), with a single-element heat fill
+// (no canvas, no per-segment spans) reusing the gauge track to stay cheap per tick.
+function CompactTrafficBar({ traffic }: { traffic: TrafficDisplay }) {
+  const style = {
+    "--compact-gauge-color": traffic.color,
+    "--compact-gauge-fill": `${clamp01(traffic.fraction) * 100}%`,
+  } as CSSProperties;
+
+  return (
+    <div
+      className="compact-node-traffic"
+      style={style}
+      title={`流量 · ${traffic.typeLabel} · ${traffic.detail}`}
+    >
+      <div className="compact-node-traffic-head">
+        <span className="compact-node-traffic-label">
+          <Database size={12} strokeWidth={2.1} />
+          <span>流量</span>
+        </span>
+        <span className="compact-node-traffic-value">{traffic.detail}</span>
+      </div>
+      <div className="compact-node-gauge-track" aria-hidden />
+    </div>
+  );
+}
+
 // Memoized: every prop is ping-derived and stays reference-stable across the
 // ~1s metrics ticks that re-render the parent card (ping data only refreshes
 // ~every 60s), so this skips re-rendering the latency/loss HealthBars subtree —
@@ -602,6 +631,7 @@ export const CompactNodeCard = memo(function CompactNodeCard({
 
   const {
     node,
+    traffic,
     trafficTrend,
     ping,
     pingBuckets,
@@ -652,6 +682,7 @@ export const CompactNodeCard = memo(function CompactNodeCard({
         expireColor={expireColor}
         renewalPrice={renewalPrice}
       />
+      <CompactTrafficBar traffic={traffic} />
       <CompactNodeHealth
         ping={ping}
         pingBuckets={pingBuckets}

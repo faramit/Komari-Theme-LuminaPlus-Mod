@@ -526,8 +526,7 @@
 .instance-meta-grid,
 .instance-details-grid,
 .instance-series-grid,
-.instance-ping-grid,
-.instance-overview-grid {
+.instance-ping-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px 18px;
@@ -618,38 +617,6 @@
   font-weight: 500;
 }
 
-.instance-overview-item {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-height: 76px;
-  padding: 12px 14px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--surface-elev) 92%, transparent);
-}
-
-.instance-overview-grid.is-compact {
-  gap: 10px;
-}
-
-.instance-overview-grid.is-compact .instance-overview-item {
-  min-height: 66px;
-  padding: 10px 12px;
-}
-
-.instance-overview-item.is-wide {
-  grid-column: span 2;
-}
-
-.instance-overview-value {
-  color: var(--text-primary);
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.55;
-  word-break: break-word;
-}
-
 .instance-overview-note,
 .instance-overview-multi {
   display: flex;
@@ -658,12 +625,6 @@
   color: var(--text-tertiary);
   font-size: 11px;
   font-weight: 500;
-}
-
-.instance-traffic-quota {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
 }
 
 .instance-progress-track {
@@ -679,37 +640,6 @@
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, var(--progress-cpu) 0%, var(--progress-memory) 100%);
-}
-
-.instance-detail-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 11px 0;
-  border-top: 1px solid var(--hairline);
-}
-
-.instance-detail-row:first-child {
-  border-top: 0;
-  padding-top: 0;
-}
-
-.instance-detail-label {
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-
-.instance-detail-value {
-  color: var(--text-primary);
-  font-size: 12.5px;
-  text-align: right;
-  word-break: break-word;
-}
-
-.instance-detail-mono {
-  font-family: var(--font-mono);
-  font-size: 11px;
 }
 
 .instance-detail-tags,
@@ -1225,8 +1155,7 @@
   .instance-details-grid,
   .instance-series-grid,
   .instance-chart-grid,
-  .instance-ping-grid,
-  .instance-overview-grid {
+  .instance-ping-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1241,10 +1170,6 @@
   .instance-segmented {
     width: 100%;
     justify-content: flex-start;
-  }
-
-  .instance-overview-item.is-wide {
-    grid-column: auto;
   }
 
   .instance-info-groups {

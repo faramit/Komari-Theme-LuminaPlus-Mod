@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
   Cpu,
@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Power,
   CircleDollarSign,
+  Database,
   Network,
 } from "lucide-react";
 import { useNodeCardModel } from "@/hooks/useNodeCardModel";
@@ -42,6 +43,7 @@ import {
 import { clsx } from "clsx";
 import type { NodeInfo, NodeMetrics, PingOverviewBucket, PingOverviewItem, TrafficTrendSample } from "@/types/komari";
 import type { TrafficRateDisplay } from "@/utils/format";
+import type { TrafficDisplay } from "@/utils/traffic";
 
 type NodeCardNode = NodeInfo & NodeMetrics;
 type DisplayStat = { value: string; unit: string };
@@ -70,6 +72,7 @@ export const NodeCard = memo(function NodeCard({
 
   const {
     node,
+    traffic,
     trafficTrend,
     ping,
     pingBuckets,
@@ -127,6 +130,8 @@ export const NodeCard = memo(function NodeCard({
             isOnline={isOnline}
             redrawKey={resolvedAppearance}
           />
+
+          <NodeTrafficQuota traffic={traffic} />
 
           {showConnections && (
             <div className="card-metric-section card-metric-divided server-card-meta-grid">
@@ -339,6 +344,33 @@ function NodeTrafficSection({
         color="var(--status-success)"
         icon={<ArrowDown size={15} strokeWidth={2.4} />}
       />
+    </div>
+  );
+}
+
+// Mandatory traffic-quota row: label + remaining inline (remaining kept in a
+// neutral theme color so it doesn't shout), used / limit on the same line (muted),
+// and a CSS segmented fill (no canvas) heat-colored by the used fraction.
+function NodeTrafficQuota({ traffic }: { traffic: TrafficDisplay }) {
+  const style = {
+    "--traffic-quota-color": traffic.color,
+    "--traffic-quota-fill": `${Math.round(traffic.fraction * 100)}%`,
+  } as CSSProperties;
+  return (
+    <div
+      className="card-metric-section traffic-quota"
+      style={style}
+      title={`流量阈值 · ${traffic.typeLabel}`}
+    >
+      <div className="traffic-quota-head">
+        <span className="traffic-quota-label">
+          <Database size={13} strokeWidth={2} />
+          <span>剩余流量</span>
+          <strong className="traffic-quota-remain">{traffic.remainingLabel}</strong>
+        </span>
+        <span className="traffic-quota-usage">{traffic.detail}</span>
+      </div>
+      <div className="traffic-quota-track" aria-hidden />
     </div>
   );
 }

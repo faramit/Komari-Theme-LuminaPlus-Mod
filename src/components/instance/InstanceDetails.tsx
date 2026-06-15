@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useNodeMeta, useNodeMetrics } from "@/hooks/useNode";
 import { formatBytes, formatUptimeDays } from "@/utils/format";
+import { resolveTrafficUsage } from "@/utils/traffic";
 import { InstancePanel } from "./InstancePanel";
 
 // Intl.DateTimeFormat is expensive to construct; reuse one instance instead of
@@ -36,11 +37,14 @@ export function InstanceDetails({
 
   const isOnline = metrics.online;
   const uptime = formatUptimeDays(metrics.uptime);
-  const trafficUsed = metrics.trafficUp + metrics.trafficDown;
-  const trafficFraction =
-    meta.traffic_limit > 0
-      ? Math.max(0, Math.min(1, trafficUsed / meta.traffic_limit))
-      : 0;
+  // Reduce up/down per traffic_limit_type (max/sum/up/down/min) like the cards and
+  // the backend — summing both was wrong for non-"sum" nodes.
+  const trafficUsage = resolveTrafficUsage(
+    meta.traffic_limit_type,
+    metrics.trafficUp,
+    metrics.trafficDown,
+    meta.traffic_limit,
+  );
   const lastUpdated =
     metrics.updatedAt > 0 ? TIME_FORMATTER.format(metrics.updatedAt) : "—";
 
@@ -103,11 +107,11 @@ export function InstanceDetails({
                   <div className="instance-progress-track" aria-hidden>
                     <span
                       className="instance-progress-fill"
-                      style={{ width: `${trafficFraction * 100}%` }}
+                      style={{ width: `${trafficUsage.fraction * 100}%` }}
                     />
                   </div>
                   <span className="instance-info-note">
-                    {`${formatBytes(trafficUsed)} / ${formatBytes(meta.traffic_limit)}`}
+                    {`${formatBytes(trafficUsage.used)} / ${formatBytes(meta.traffic_limit)}`}
                   </span>
                 </>
               )}

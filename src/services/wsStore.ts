@@ -905,7 +905,9 @@ export function ensureStarted() {
     void refreshLatestStatus();
   }, LIVE_STATUS_REFRESH_INTERVAL_MS);
   nodeInfoTimer = window.setInterval(() => {
-    void syncNodeInfo();
+    // syncNodeInfo only has a finally; swallow a transient /api/nodes failure so a
+    // failed 30s tick can't surface an unhandled rejection (the next tick retries).
+    void syncNodeInfo().catch(() => {});
   }, NODE_INFO_REFRESH_INTERVAL_MS);
 }
 

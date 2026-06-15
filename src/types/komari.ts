@@ -142,6 +142,7 @@ export interface ThemeSettings {
   homeGroupOrder?: string[];
   moveOfflineNodesBack?: boolean;
   showCostSummary?: boolean;
+  showCostSummaryFloatingButton?: boolean;
   compactShowTrafficTotal?: boolean;
   compactShowBilling?: boolean;
   showConnections?: boolean;

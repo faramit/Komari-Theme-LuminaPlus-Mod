@@ -177,6 +177,7 @@ function pickManagedThemeSettings(settings: ResolvedThemeSettings): ThemeSetting
     homeGroupOrder: settings.homeGroupOrder,
     moveOfflineNodesBack: settings.moveOfflineNodesBack,
     showCostSummary: settings.showCostSummary,
+    showCostSummaryFloatingButton: settings.showCostSummaryFloatingButton,
     compactShowTrafficTotal: settings.compactShowTrafficTotal,
     compactShowBilling: settings.compactShowBilling,
     showConnections: settings.showConnections,
@@ -202,6 +203,8 @@ export function ThemeManage() {
   const [draftHomeGroupOrder, setDraftHomeGroupOrder] = useState<string[]>([]);
   const [draftMoveOfflineNodesBack, setDraftMoveOfflineNodesBack] = useState(true);
   const [draftShowCostSummary, setDraftShowCostSummary] = useState(true);
+  const [draftShowCostSummaryFloatingButton, setDraftShowCostSummaryFloatingButton] =
+    useState(true);
   const [draftCompactShowTrafficTotal, setDraftCompactShowTrafficTotal] = useState(true);
   const [draftCompactShowBilling, setDraftCompactShowBilling] = useState(true);
   const [draftShowConnections, setDraftShowConnections] = useState(false);
@@ -266,6 +269,7 @@ export function ThemeManage() {
     setDraftHomeGroupOrder(next.homeGroupOrder);
     setDraftMoveOfflineNodesBack(next.moveOfflineNodesBack);
     setDraftShowCostSummary(next.showCostSummary);
+    setDraftShowCostSummaryFloatingButton(next.showCostSummaryFloatingButton);
     setDraftCompactShowTrafficTotal(next.compactShowTrafficTotal);
     setDraftCompactShowBilling(next.compactShowBilling);
     setDraftShowConnections(next.showConnections);
@@ -354,6 +358,7 @@ export function ThemeManage() {
       homeGroupOrder: normalizeHomeGroupOrder(draftHomeGroupOrder),
       moveOfflineNodesBack: draftMoveOfflineNodesBack,
       showCostSummary: draftShowCostSummary,
+      showCostSummaryFloatingButton: draftShowCostSummaryFloatingButton,
       compactShowTrafficTotal: draftCompactShowTrafficTotal,
       compactShowBilling: draftCompactShowBilling,
       showConnections: draftShowConnections,
@@ -370,6 +375,7 @@ export function ThemeManage() {
       draftHomeGroupOrder,
       draftMoveOfflineNodesBack,
       draftShowCostSummary,
+      draftShowCostSummaryFloatingButton,
       draftCompactShowTrafficTotal,
       draftCompactShowBilling,
       draftShowConnections,
@@ -805,6 +811,24 @@ export function ThemeManage() {
                 type="checkbox"
                 checked={draftShowCostSummary}
                 onChange={(event) => setDraftShowCostSummary(event.target.checked)}
+                className="h-4 w-4 shrink-0 accent-[var(--accent-500)]"
+              />
+            </label>
+            <label className="surface-inset flex items-center justify-between gap-3 px-4 py-3">
+              <span className="min-w-0">
+                <span className="block text-[13px] font-medium text-[var(--text-primary)]">
+                  显示资产悬浮按钮
+                </span>
+                <span className="mt-1 block text-[11px] text-[var(--text-tertiary)]">
+                  关闭顶部总览时，仍可通过悬浮按钮打开资产详情。
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={draftShowCostSummaryFloatingButton}
+                onChange={(event) =>
+                  setDraftShowCostSummaryFloatingButton(event.target.checked)
+                }
                 className="h-4 w-4 shrink-0 accent-[var(--accent-500)]"
               />
             </label>

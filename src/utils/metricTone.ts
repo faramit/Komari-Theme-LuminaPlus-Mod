@@ -29,6 +29,30 @@ export function latencyHeatColor(ms: number | null | undefined): string {
   return toHsl(30 - 24 * t, 86 - 2 * t, 52 - 8 * t);
 }
 
+// Usage heat for the traffic-quota bar: green when there's plenty left, sliding
+// through amber to red as used/limit approaches 1. Mirrors the latency/loss
+// gradient style so the cards share one visual vocabulary.
+export function trafficUsageColor(fraction: number | null | undefined): string {
+  if (fraction == null || !Number.isFinite(fraction) || fraction <= 0) {
+    return "var(--status-success)";
+  }
+
+  const f = clamp(fraction, 0, 1);
+
+  if (f <= 0.6) {
+    const t = clamp(f / 0.6, 0, 1);
+    return toHsl(146 - 56 * t, 60 + 8 * t, 47 + 3 * t);
+  }
+
+  if (f <= 0.85) {
+    const t = clamp((f - 0.6) / 0.25, 0, 1);
+    return toHsl(90 - 48 * t, 72 + 6 * t, 51);
+  }
+
+  const t = clamp((f - 0.85) / 0.15, 0, 1);
+  return toHsl(42 - 36 * t, 80 + 4 * t, 52 - 5 * t);
+}
+
 export function lossHeatColor(pct: number | null | undefined): string {
   if (pct == null || !Number.isFinite(pct) || pct < 0) {
     return "var(--text-tertiary)";
