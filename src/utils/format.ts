@@ -5,6 +5,7 @@ const TRAFFIC_RATE_THRESHOLDS: Array<{ unit: Exclude<TrafficRateUnit, "bps">; di
   { unit: "Mbps", divisor: 1_000_000 },
   { unit: "Kbps", divisor: 1_000 },
 ];
+export const LONG_TERM_EXPIRE_DAYS = 36500;
 
 type ExpireTone = "ok" | "warn" | "critical" | "long" | "none";
 export type TrafficRateUnit = "bps" | "Kbps" | "Mbps" | "Gbps" | "Tbps";
@@ -118,16 +119,38 @@ export function formatOfflineDuration(
   return { value: String(days), unit: "天", full: `离线 ${days} 天` };
 }
 
+// Resolve a node's `expired_at` to an absolute ms timestamp, or null when it
+// carries no real expiry. Komari encodes "no expiry" several ways depending on
+// backend/agent version: JSON null (→ "" via our zod transform), the Go zero-time
+// "0001-01-01T00:00:00Z" (parses to year 1, i.e. a ≤0 epoch), or a numeric
+// sentinel 0 / -1. None of these are a real past date — letting Date.parse turn
+// them into year 1/2000/2001 is what made never-expiring nodes render "已过期"
+// and drop out of the cost summary. A bare positive number is a unix timestamp.
+export function resolveExpireTimestamp(
+  iso: string | number | null | undefined,
+): number | null {
+  if (iso == null) return null;
+  const raw = String(iso).trim();
+  if (raw === "") return null;
+  if (/^-?\d+$/.test(raw)) {
+    const n = Number(raw);
+    if (n <= 0) return null; // 0 / -1 "no expiry" sentinels
+    return n < 1e12 ? n * 1000 : n; // unix seconds vs. milliseconds
+  }
+  const ts = Date.parse(raw);
+  if (Number.isNaN(ts) || ts <= 0) return null; // unparseable or Go zero-time
+  return ts;
+}
+
 export function getExpireDaysRemaining(iso: string | null | undefined): number | null {
-  if (!iso) return null;
-  const ts = Date.parse(iso);
-  if (Number.isNaN(ts)) return null;
+  const ts = resolveExpireTimestamp(iso);
+  if (ts == null) return null;
   return Math.floor((ts - Date.now()) / 86400000);
 }
 
 function resolveExpireTone(days: number | null | undefined): ExpireTone {
   if (days == null || !Number.isFinite(days)) return "none";
-  if (days > 36500) return "long";
+  if (days > LONG_TERM_EXPIRE_DAYS) return "long";
   if (days > 30) return "ok";
   if (days > 7) return "warn";
   return "critical";

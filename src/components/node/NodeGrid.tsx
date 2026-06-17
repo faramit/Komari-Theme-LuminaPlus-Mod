@@ -19,6 +19,11 @@ import {
   sortHomeGroupOptions,
   sortHomeNodeSummaries,
 } from "@/utils/homeNodes";
+import {
+  getOverviewRating,
+  type OverviewRating,
+  type OverviewRatingStyle,
+} from "@/utils/overviewRating";
 import { Spinner } from "@/components/ui/Spinner";
 import { CompactNodeCard } from "./CompactNodeCard";
 import { CostSummary } from "./CostSummary";
@@ -38,16 +43,50 @@ interface HomeOverview {
   netDown: number;
 }
 
+const SHORT_RATE_UNITS: Record<ReturnType<typeof formatTrafficRate>["unit"], string> = {
+  bps: "b",
+  Kbps: "K",
+  Mbps: "M",
+  Gbps: "G",
+  Tbps: "T",
+};
+
+function formatCompactBytes(value: number): string {
+  const [amount, unit = "B"] = formatBytes(value).split(" ");
+  return `${amount}${unit[0]}`;
+}
+
+function formatCompactTrafficRateLabel(value: number): string {
+  const rate = formatTrafficRate(value);
+  return `${rate.value}${SHORT_RATE_UNITS[rate.unit]}`;
+}
+
 function HomeOverviewCards({
   overview,
   costSummary,
   costLoading,
+  showOverviewRatings,
+  overviewRatingStyle,
+  showTrafficRating,
+  showBandwidthRating,
+  showAssetRating,
+  trafficRatingLabels,
+  bandwidthRatingLabels,
+  assetRatingLabels,
   showDetailButton,
   onOpenCostSummary,
 }: {
   overview: HomeOverview;
   costSummary: { remainingCny: number } | null;
   costLoading: boolean;
+  showOverviewRatings: boolean;
+  overviewRatingStyle: OverviewRatingStyle;
+  showTrafficRating: boolean;
+  showBandwidthRating: boolean;
+  showAssetRating: boolean;
+  trafficRatingLabels: string;
+  bandwidthRatingLabels: string;
+  assetRatingLabels: string;
   showDetailButton: boolean;
   onOpenCostSummary: () => void;
 }) {
@@ -64,6 +103,44 @@ function HomeOverviewCards({
     : costLoading
       ? "计算中"
       : "—";
+  const trafficDetailLabel = `↑ ${formatBytes(overview.trafficUp)} · ↓ ${formatBytes(overview.trafficDown)}`;
+  const trafficCompactLabel = `↑${formatCompactBytes(overview.trafficUp)} ↓${formatCompactBytes(overview.trafficDown)}`;
+  const bandwidthDetailLabel = `↑ ${formatTrafficRateLabel(overview.netUp)} · ↓ ${formatTrafficRateLabel(overview.netDown)}`;
+  const bandwidthCompactLabel = `↑${formatCompactTrafficRateLabel(overview.netUp)} ↓${formatCompactTrafficRateLabel(overview.netDown)}`;
+  const trafficRating =
+    showOverviewRatings && showTrafficRating
+      ? getOverviewRating({
+          kind: "traffic",
+          value: overview.trafficUp + overview.trafficDown,
+          style: overviewRatingStyle,
+          customLabels: trafficRatingLabels,
+        })
+      : null;
+  const bandwidthRating =
+    showOverviewRatings && showBandwidthRating
+      ? getOverviewRating({
+          kind: "bandwidth",
+          value: overview.netUp + overview.netDown,
+          style: overviewRatingStyle,
+          customLabels: bandwidthRatingLabels,
+        })
+      : null;
+  const assetRating =
+    showOverviewRatings && showAssetRating && costSummary
+      ? getOverviewRating({
+          kind: "asset",
+          value: costSummary.remainingCny,
+          style: overviewRatingStyle,
+          customLabels: assetRatingLabels,
+        })
+      : null;
+
+  const renderRating = (rating: OverviewRating | null) =>
+    rating ? (
+      <span className="overview-card-rating" data-rating-level={rating.level} title={rating.label}>
+        {rating.label}
+      </span>
+    ) : null;
 
   return (
     <section className="home-overview" aria-label="首页总览">
@@ -89,9 +166,13 @@ function HomeOverviewCards({
             <span className="overview-card-unit">{trafficUnit}</span>
           </p>
         </div>
-        <p className="overview-card-sub">
-          ↑ {formatBytes(overview.trafficUp)} · ↓ {formatBytes(overview.trafficDown)}
-        </p>
+        <div className="overview-card-footer">
+          <p className="overview-card-sub" title={trafficDetailLabel}>
+            <span className="overview-card-sub-full">{trafficDetailLabel}</span>
+            <span className="overview-card-sub-compact">{trafficCompactLabel}</span>
+          </p>
+          {renderRating(trafficRating)}
+        </div>
       </article>
 
       <article className="overview-card">
@@ -102,9 +183,13 @@ function HomeOverviewCards({
             <span className="overview-card-unit">{rate.unit}</span>
           </p>
         </div>
-        <p className="overview-card-sub">
-          ↑ {formatTrafficRateLabel(overview.netUp)} · ↓ {formatTrafficRateLabel(overview.netDown)}
-        </p>
+        <div className="overview-card-footer">
+          <p className="overview-card-sub" title={bandwidthDetailLabel}>
+            <span className="overview-card-sub-full">{bandwidthDetailLabel}</span>
+            <span className="overview-card-sub-compact">{bandwidthCompactLabel}</span>
+          </p>
+          {renderRating(bandwidthRating)}
+        </div>
       </article>
 
       <article className="overview-card">
@@ -125,7 +210,10 @@ function HomeOverviewCards({
         <div className="overview-card-main">
           <p className="overview-card-value">{remainingValue}</p>
         </div>
-        <p className="overview-card-caption">实时汇率计算</p>
+        <div className="overview-card-footer">
+          <p className="overview-card-caption">实时汇率计算</p>
+          {renderRating(assetRating)}
+        </div>
       </article>
     </section>
   );
@@ -321,6 +409,14 @@ export function NodeGrid() {
             showDetailButton={showCostDetailButton}
             costSummary={costSummary}
             costLoading={costLoading}
+            showOverviewRatings={themeSettings.showOverviewRatings}
+            overviewRatingStyle={themeSettings.overviewRatingStyle}
+            showTrafficRating={themeSettings.showTrafficRating}
+            showBandwidthRating={themeSettings.showBandwidthRating}
+            showAssetRating={themeSettings.showAssetRating}
+            trafficRatingLabels={themeSettings.trafficRatingLabels}
+            bandwidthRatingLabels={themeSettings.bandwidthRatingLabels}
+            assetRatingLabels={themeSettings.assetRatingLabels}
             onOpenCostSummary={() => setCostSummaryOpen(true)}
           />
         )}
@@ -347,6 +443,14 @@ export function NodeGrid() {
           showDetailButton={showCostDetailButton}
           costSummary={costSummary}
           costLoading={costLoading}
+          showOverviewRatings={themeSettings.showOverviewRatings}
+          overviewRatingStyle={themeSettings.overviewRatingStyle}
+          showTrafficRating={themeSettings.showTrafficRating}
+          showBandwidthRating={themeSettings.showBandwidthRating}
+          showAssetRating={themeSettings.showAssetRating}
+          trafficRatingLabels={themeSettings.trafficRatingLabels}
+          bandwidthRatingLabels={themeSettings.bandwidthRatingLabels}
+          assetRatingLabels={themeSettings.assetRatingLabels}
           onOpenCostSummary={() => setCostSummaryOpen(true)}
         />
       )}

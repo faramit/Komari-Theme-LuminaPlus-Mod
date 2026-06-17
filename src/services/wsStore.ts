@@ -140,73 +140,28 @@ function mergeNodeInfo(info: NodeInfo): NodeInfo {
   return { ...info };
 }
 
-interface TrafficTotalDirectionState {
-  raw: number;
-  offset: number;
+// Surface one direction of a node's cumulative traffic counter (net_total_up/down)
+// straight from the backend — including a *decrease* when the counter legitimately
+// resets (agent reinstall, billing-cycle rollover), so the overview total and the
+// per-node traffic-limit bars stay aligned with the backend instead of drifting
+// above it. The single guard: a frame that omits the totals normalizes to 0, so we
+// treat 0 as "no sample this tick" and hold the previous value rather than letting
+// a partial realtime frame flicker the total down to zero.
+//
+// This intentionally replaces an earlier offset-based scheme that carried the prior
+// total across every reset to stay monotonic. That scheme quietly inflated the
+// displayed total on each offline→online flap (each flap re-added the node's whole
+// total), so over a session it climbed far above the backend — the value snapped
+// back down on a hard refresh and then climbed again. Exported for unit testing.
+export function resolveTrafficTotal(previous: number, raw: number): number {
+  return Number.isFinite(raw) && raw > 0 ? raw : previous;
 }
 
-type TrafficTotalState = Record<
-  string,
-  {
-    up: TrafficTotalDirectionState;
-    down: TrafficTotalDirectionState;
-  }
->;
-
-let trafficTotalState: TrafficTotalState = {};
-
-function resolveTrafficTotalDirection(
-  previousDisplay: number,
-  rawValue: number,
-  prevState: TrafficTotalDirectionState | undefined,
-): { state: TrafficTotalDirectionState; display: number } {
-  const raw = Number.isFinite(rawValue) && rawValue > 0 ? rawValue : 0;
-  const previous = Number.isFinite(previousDisplay) && previousDisplay > 0 ? previousDisplay : 0;
-
-  if (!prevState) {
-    const display = Math.max(previous, raw);
-    return {
-      state: { raw, offset: Math.max(0, display - raw) },
-      display,
-    };
-  }
-
-  const offset =
-    raw >= prevState.raw
-      ? prevState.offset
-      : Math.max(previous, prevState.offset + prevState.raw);
-  const display = Math.max(previous, offset + raw);
-
+function resolveTrafficTotals(previous: NodeMetrics, nextUp: number, nextDown: number) {
   return {
-    state: { raw, offset },
-    display,
+    up: resolveTrafficTotal(previous.trafficUp, nextUp),
+    down: resolveTrafficTotal(previous.trafficDown, nextDown),
   };
-}
-
-function resolveTrafficTotals(
-  uuid: string,
-  previous: NodeMetrics,
-  nextUp: number,
-  nextDown: number,
-) {
-  const prevState = trafficTotalState[uuid];
-  const up = resolveTrafficTotalDirection(previous.trafficUp, nextUp, prevState?.up);
-  const down = resolveTrafficTotalDirection(previous.trafficDown, nextDown, prevState?.down);
-
-  if (
-    !prevState ||
-    prevState.up.raw !== up.state.raw ||
-    prevState.up.offset !== up.state.offset ||
-    prevState.down.raw !== down.state.raw ||
-    prevState.down.offset !== down.state.offset
-  ) {
-    trafficTotalState = {
-      ...trafficTotalState,
-      [uuid]: { up: up.state, down: down.state },
-    };
-  }
-
-  return { up: up.display, down: down.display };
 }
 
 function mergeRealtime(
@@ -223,7 +178,6 @@ function mergeRealtime(
   const diskTotal = rt.disk?.total ?? metrics.diskTotal ?? meta.disk_total;
   const updatedAt = toTimestamp(rt.updated_at);
   const trafficTotals = resolveTrafficTotals(
-    meta.uuid,
     metrics,
     rt.network?.totalUp ?? 0,
     rt.network?.totalDown ?? 0,
@@ -772,15 +726,6 @@ async function syncNodeInfo(force = false) {
       order.map((uuid) => [uuid, state.trafficTrends[uuid] ?? EMPTY_TRAFFIC_TREND]),
     );
 
-    // Drop monotonic-total bookkeeping for nodes that no longer exist so the
-    // module-level map can't grow unbounded across the session.
-    if (Object.keys(trafficTotalState).some((uuid) => !nextUuids.has(uuid))) {
-      const prunedTotals: TrafficTotalState = {};
-      for (const [uuid, totals] of Object.entries(trafficTotalState)) {
-        if (nextUuids.has(uuid)) prunedTotals[uuid] = totals;
-      }
-      trafficTotalState = prunedTotals;
-    }
     const nodeListChanged =
       orderChanged ||
       [...touchedMeta].some((uuid) => {

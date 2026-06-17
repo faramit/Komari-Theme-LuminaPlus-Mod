@@ -1,5 +1,9 @@
-import { describe, expect, it } from "vitest";
-import { formatBillingCycle } from "@/utils/billing";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { formatBillingCycle, formatRenewalPrice } from "@/utils/billing";
+
+function inDays(days: number) {
+  return new Date(Date.now() + days * 86_400_000).toISOString();
+}
 
 describe("formatBillingCycle", () => {
   it("maps known day-counts to labels", () => {
@@ -34,5 +38,43 @@ describe("formatBillingCycle", () => {
 
   it("falls back to a day-count for arbitrary positive numbers", () => {
     expect(formatBillingCycle(45)).toBe("45天");
+  });
+});
+
+describe("formatRenewalPrice", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-13T12:00:00.000Z"));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("renders -1 prices as free", () => {
+    expect(formatRenewalPrice({ price: -1, currency: "¥", billing_cycle: 365 })).toBe("免费");
+  });
+
+  it("renders zero prices as free only for long-term expiry", () => {
+    expect(
+      formatRenewalPrice({
+        price: 0,
+        currency: "¥",
+        billing_cycle: 365,
+        expired_at: inDays(40_000),
+      }),
+    ).toBe("免费");
+    expect(
+      formatRenewalPrice({
+        price: 0,
+        currency: "¥",
+        billing_cycle: 365,
+        expired_at: inDays(30),
+      }),
+    ).toBeNull();
+  });
+
+  it("renders positive prices with currency and billing cycle", () => {
+    expect(formatRenewalPrice({ price: 10, currency: "$", billing_cycle: 30 })).toBe("$10/月");
+    expect(formatRenewalPrice({ price: 19.9, currency: "¥", billing_cycle: -1 })).toBe("¥19.90/永久");
   });
 });

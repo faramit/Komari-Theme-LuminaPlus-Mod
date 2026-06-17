@@ -49,8 +49,8 @@
 .server-card-content {
   display: flex;
   flex-direction: column;
-  padding: 22px 20px 16px;
-  gap: 18px;
+  padding: 16px 16px 12px;
+  gap: 12px;
 }
 
 .server-card-header {
@@ -142,7 +142,7 @@
 .server-card-stack {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
 }
 
 .server-metric-grid {
@@ -207,7 +207,7 @@
 
 /* Internal hairline dividers — solid #212121 in dark, #e4e4e7 in light */
 .card-metric-section + .card-metric-section.card-metric-divided {
-  padding-top: 12px;
+  padding-top: 10px;
   border-top: 1px solid var(--hairline);
 }
 
@@ -220,7 +220,7 @@
 .traffic-stat {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
 }
 
@@ -249,7 +249,7 @@
 
 .traffic-stat-value {
   flex: 0 0 auto;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 640;
   letter-spacing: -0.03em;
 }
@@ -354,8 +354,11 @@
 .traffic-quota {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
+  /* A touch more breathing room above 剩余流量 so it doesn't crowd the 出站/入站
+     row after the round-2 density pass; intentionally additive to the stack gap. */
+  margin-top: 3px;
 }
 
 .traffic-quota-head {
@@ -440,7 +443,7 @@
 .server-health-block {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 9px;
   min-width: 0;
 }
 
@@ -468,7 +471,7 @@
 .server-health-value,
 .server-card-meta-value {
   flex: 0 0 auto;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 640;
   letter-spacing: -0.03em;
 }
@@ -480,7 +483,7 @@
 }
 
 .server-card-footer {
-  padding-top: 12px;
+  padding-top: 10px;
   border-top: 1px solid var(--hairline);
   display: flex;
   flex-direction: column;
@@ -497,13 +500,26 @@
 .dstatus-tags-row {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   min-width: 0;
   gap: 0.375rem;
+  overflow: hidden;
   padding-top: 0.125rem;
 }
 
+.dstatus-tags-measure {
+  position: absolute;
+  top: 0;
+  left: -9999px;
+  width: max-content;
+  overflow: visible;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .dstatus-tag-chip {
+  /* Shrinkable so a sole over-wide tag (kept when nothing fully fits) ellipsizes
+     to the row width instead of overflowing; fitting tags never shrink because the
+     measure pass guarantees their total already fits. */
   flex: 0 1 auto;
   min-width: 0;
   max-width: 10rem;
@@ -516,16 +532,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   letter-spacing: 0.01em;
-}
-
-.dstatus-tag-more {
-  flex: 0 0 auto;
-  background: var(--tag-gray-bg);
-  color: var(--tag-gray-fg);
-  border-radius: 8px;
-  padding: 0.38rem 0.62rem;
-  font-size: 11px;
-  line-height: 1.15;
 }
 
 .dstatus-price-chip {

@@ -200,6 +200,13 @@ function formatCompactExpire({
   return unit ? `余 ${value}${unit}` : value;
 }
 
+function formatCompactUptime(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "";
+  const days = seconds / 86400;
+  const value = days >= 1 ? Math.floor(days).toString() : trimFixed(days, 2);
+  return `在线：${value}天`;
+}
+
 function HealthBars({
   buckets,
   max,
@@ -548,7 +555,13 @@ function CompactNodeInfoStrip({
 // Mandatory traffic-quota bar: label + used / limit on one line (compact cards are
 // dense, so the remaining figure is dropped here), with a single-element heat fill
 // (no canvas, no per-segment spans) reusing the gauge track to stay cheap per tick.
-function CompactTrafficBar({ traffic }: { traffic: TrafficDisplay }) {
+function CompactTrafficBar({
+  traffic,
+  uptimeLabel,
+}: {
+  traffic: TrafficDisplay;
+  uptimeLabel: string;
+}) {
   const style = {
     "--compact-gauge-color": traffic.color,
     "--compact-gauge-fill": `${clamp01(traffic.fraction) * 100}%`,
@@ -558,16 +571,32 @@ function CompactTrafficBar({ traffic }: { traffic: TrafficDisplay }) {
     <div
       className="compact-node-traffic"
       style={style}
-      title={`流量 · ${traffic.typeLabel} · ${traffic.detail}`}
+      title={`流量 · ${traffic.typeLabel} · ${traffic.detail}${uptimeLabel ? ` · ${uptimeLabel}` : ""}`}
     >
-      <div className="compact-node-traffic-head">
-        <span className="compact-node-traffic-label">
-          <Database size={12} strokeWidth={2.1} />
-          <span>流量</span>
-        </span>
-        <span className="compact-node-traffic-value">{traffic.detail}</span>
+      <div className={clsx("compact-node-traffic-body", uptimeLabel && "has-uptime")}>
+        {uptimeLabel ? (
+          <>
+            <span className="compact-node-traffic-label">
+              <Database size={12} strokeWidth={2.1} />
+              <span>流量</span>
+            </span>
+            <div className="compact-node-gauge-track" aria-hidden />
+            <span className="compact-node-traffic-uptime">{uptimeLabel}</span>
+            <span className="compact-node-traffic-value">{traffic.detail}</span>
+          </>
+        ) : (
+          <>
+            <div className="compact-node-traffic-head">
+              <span className="compact-node-traffic-label">
+                <Database size={12} strokeWidth={2.1} />
+                <span>流量</span>
+              </span>
+              <span className="compact-node-traffic-value">{traffic.detail}</span>
+            </div>
+            <div className="compact-node-gauge-track" aria-hidden />
+          </>
+        )}
       </div>
-      <div className="compact-node-gauge-track" aria-hidden />
     </div>
   );
 }
@@ -658,7 +687,10 @@ export const CompactNodeCard = memo(function CompactNodeCard({
     .join(" / ");
   const showTrafficTotal = themeSettings.isReady && themeSettings.compactShowTrafficTotal;
   const showBilling = themeSettings.isReady && themeSettings.compactShowBilling;
+  const showUptime = themeSettings.isReady && themeSettings.compactShowUptime;
   const showConnections = themeSettings.isReady && themeSettings.showConnections;
+  // Skip the format work entirely when the toggle is off or the node is offline.
+  const uptimeLabel = showUptime && !isOffline ? formatCompactUptime(node.uptime) : "";
 
   return (
     <article className={clsx("compact-node-card", isOffline && "is-offline")}>
@@ -682,7 +714,7 @@ export const CompactNodeCard = memo(function CompactNodeCard({
         expireColor={expireColor}
         renewalPrice={renewalPrice}
       />
-      <CompactTrafficBar traffic={traffic} />
+      <CompactTrafficBar traffic={traffic} uptimeLabel={uptimeLabel} />
       <CompactNodeHealth
         ping={ping}
         pingBuckets={pingBuckets}

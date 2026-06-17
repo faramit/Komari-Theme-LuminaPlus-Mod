@@ -1,6 +1,10 @@
 import type { ThemeSettings } from "@/types/komari";
 import { DEFAULT_COST_RATE_API_URL, normalizeCostIgnoredNodes, normalizeCostRateApiUrl } from "@/utils/cost";
 import { normalizeHomeGroupOrder } from "@/utils/homeNodes";
+import {
+  isOverviewRatingStyle,
+  type OverviewRatingStyle,
+} from "@/utils/overviewRating";
 import { normalizeHomepagePingTaskBindings, type HomepagePingTaskBindings } from "@/utils/pingTasks";
 
 export type Appearance = "system" | "light" | "dark";
@@ -19,8 +23,17 @@ export interface ResolvedThemeSettings {
   moveOfflineNodesBack: boolean;
   showCostSummary: boolean;
   showCostSummaryFloatingButton: boolean;
+  showOverviewRatings: boolean;
+  overviewRatingStyle: OverviewRatingStyle;
+  showTrafficRating: boolean;
+  showBandwidthRating: boolean;
+  showAssetRating: boolean;
+  trafficRatingLabels: string;
+  bandwidthRatingLabels: string;
+  assetRatingLabels: string;
   compactShowTrafficTotal: boolean;
   compactShowBilling: boolean;
+  compactShowUptime: boolean;
   showConnections: boolean;
   costIgnoredNodes: string[];
   costRateApiUrl: string;
@@ -39,8 +52,17 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   moveOfflineNodesBack: true,
   showCostSummary: true,
   showCostSummaryFloatingButton: true,
+  showOverviewRatings: true,
+  overviewRatingStyle: "plain",
+  showTrafficRating: true,
+  showBandwidthRating: true,
+  showAssetRating: true,
+  trafficRatingLabels: "",
+  bandwidthRatingLabels: "",
+  assetRatingLabels: "",
   compactShowTrafficTotal: true,
   compactShowBilling: true,
+  compactShowUptime: true,
   showConnections: false,
   costIgnoredNodes: [],
   costRateApiUrl: DEFAULT_COST_RATE_API_URL,
@@ -72,6 +94,10 @@ function enabledUnlessFalse(value: unknown) {
   return value !== false;
 }
 
+function normalizePlainText(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
 export function normalizeThemeSettings(
   settings: (ThemeSettings & Record<string, unknown>) | null | undefined,
 ): ResolvedThemeSettings {
@@ -94,8 +120,19 @@ export function normalizeThemeSettings(
     moveOfflineNodesBack: enabledUnlessFalse(settings?.moveOfflineNodesBack),
     showCostSummary: enabledUnlessFalse(settings?.showCostSummary),
     showCostSummaryFloatingButton: enabledUnlessFalse(settings?.showCostSummaryFloatingButton),
+    showOverviewRatings: enabledUnlessFalse(settings?.showOverviewRatings),
+    overviewRatingStyle: isOverviewRatingStyle(settings?.overviewRatingStyle)
+      ? settings.overviewRatingStyle
+      : DEFAULT_THEME_SETTINGS.overviewRatingStyle,
+    showTrafficRating: enabledUnlessFalse(settings?.showTrafficRating),
+    showBandwidthRating: enabledUnlessFalse(settings?.showBandwidthRating),
+    showAssetRating: enabledUnlessFalse(settings?.showAssetRating),
+    trafficRatingLabels: normalizePlainText(settings?.trafficRatingLabels),
+    bandwidthRatingLabels: normalizePlainText(settings?.bandwidthRatingLabels),
+    assetRatingLabels: normalizePlainText(settings?.assetRatingLabels),
     compactShowTrafficTotal: enabledUnlessFalse(settings?.compactShowTrafficTotal),
     compactShowBilling: enabledUnlessFalse(settings?.compactShowBilling),
+    compactShowUptime: enabledUnlessFalse(settings?.compactShowUptime),
     // Default OFF (opt-in): connection counts are a niche metric and many agents
     // don't report them, so we only show when explicitly enabled.
     showConnections: settings?.showConnections === true,

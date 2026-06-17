@@ -451,7 +451,10 @@ export function LoadChart({
       .sort((a, b) => a.time - b.time);
     const sampled = downsamplePoints(rawPoints, getHistoryRenderLimit(hours));
     const filled = fillMissingMetricPoints(sampled);
-    return interpolateMetricGaps(filled, LOAD_INTERPOLATE_KEYS);
+    // The shared helpers now type missing cells as `number | null | undefined` (the
+    // ping path needs undefined to mark off-phase columns). LoadChart only ever
+    // null-fills, so its points carry no undefined at runtime — narrow back here.
+    return interpolateMetricGaps(filled, LOAD_INTERPOLATE_KEYS) as ChartPoint[];
   }, [data, hours]);
 
   const points = useMemo<ChartPoint[]>(() => {

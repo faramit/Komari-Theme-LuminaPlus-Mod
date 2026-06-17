@@ -1,13 +1,21 @@
 export type TimedMetricPoint = {
   time: number;
-  [key: string]: number | null;
+  // null = a real break (packet loss or a detected outage) — cuts the line.
+  // undefined = this task simply has no sample at this aligned anchor (another
+  // task created it) — must be spanned, not treated as a break. Keeping the two
+  // distinct is what lets uPlot draw continuous lines across off-phase columns
+  // while still breaking at genuine gaps.
+  [key: string]: number | null | undefined;
 };
 
 // Upper bound on gap-marker (null) points inserted per detected gap, so a long
 // outage can't inflate the aligned arrays into thousands of points.
 const MAX_SENTINELS_PER_GAP = 6;
 
-function hasPointNearTime(times: number[], target: number, tolerance: number) {
+// Index of a time within `tolerance` of `target` (binary search over ascending
+// `times`), or -1 if none. Used to merge a break-null onto an existing other-task
+// anchor instead of spawning a near-duplicate column.
+function findPointNearTime(times: number[], target: number, tolerance: number) {
   let low = 0;
   let high = times.length - 1;
 
@@ -15,7 +23,7 @@ function hasPointNearTime(times: number[], target: number, tolerance: number) {
     const mid = Math.floor((low + high) / 2);
     const value = times[mid];
     if (Math.abs(value - target) <= tolerance) {
-      return true;
+      return mid;
     }
     if (value < target) {
       low = mid + 1;
@@ -24,7 +32,7 @@ function hasPointNearTime(times: number[], target: number, tolerance: number) {
     }
   }
 
-  return false;
+  return -1;
 }
 
 function median(values: number[]) {
@@ -37,7 +45,13 @@ function median(values: number[]) {
   return sorted[mid];
 }
 
-function normalizePoints(points: TimedMetricPoint[]) {
+// `spanMissing` decides what an absent task key becomes. false (default) fills with
+// `null` — treats a missing sample as a real break, correct for single-series fills
+// like LoadChart's fillMissingMetricPoints. true fills with `undefined` so off-phase
+// anchors (columns another task created) stay spannable instead of cutting every
+// line. (A boolean, not a fill value, because passing `undefined` to a defaulted
+// param would just re-trigger the default.)
+function normalizePoints(points: TimedMetricPoint[], spanMissing = false) {
   if (points.length === 0) {
     return { points: [] as TimedMetricPoint[], keys: [] as string[] };
   }
@@ -51,14 +65,15 @@ function normalizePoints(points: TimedMetricPoint[]) {
     }, new Set<string>()),
   );
 
-  const base = Object.fromEntries(keys.map((key) => [key, null] as const));
+  const fillValue = spanMissing ? undefined : null;
+  const base = Object.fromEntries(keys.map((key) => [key, fillValue] as const));
   const deduped = new Map<number, TimedMetricPoint>();
 
+  // Merge (not overwrite) points sharing a timestamp so a per-task sentinel null
+  // landing on an existing anchor can't drop that anchor's other-task values.
   for (const point of [...points].sort((a, b) => a.time - b.time)) {
-    deduped.set(point.time, {
-      ...base,
-      ...point,
-    });
+    const prev = deduped.get(point.time);
+    deduped.set(point.time, prev ? { ...prev, ...point } : { ...base, ...point });
   }
 
   return {
@@ -119,9 +134,13 @@ export function fillMissingMetricPoints(
         ? sortedPoints[pointer]
         : null;
 
+    // Snap interior samples onto the grid time, but keep the newest sample's own
+    // timestamp — otherwise an off-grid final point gets pulled up to half an
+    // interval earlier, shifting the chart's right edge and coverage label.
+    const isLastSample = matched === sortedPoints[sortedPoints.length - 1];
     filled.push(
       matched
-        ? { ...base, ...matched, time: current }
+        ? { ...base, ...matched, time: isLastSample ? matched.time : current }
         : { ...base, time: current },
     );
 
@@ -141,7 +160,7 @@ export function insertMetricGapSentinels(
     matchToleranceRatio?: number;
   },
 ) {
-  const normalized = normalizePoints(points);
+  const normalized = normalizePoints(points, true);
   if (normalized.points.length < 2 || normalized.keys.length === 0) {
     return normalized.points;
   }
@@ -168,25 +187,34 @@ export function insertMetricGapSentinels(
     if (!Number.isFinite(interval) || interval <= 0) continue;
 
     const tolerance = Math.max(1, interval * toleranceRatio);
+    // Only treat a hole as a real break once it exceeds ~2 sample intervals, so a
+    // single jittered/missed ping doesn't shred the line; smaller holes are left
+    // for uPlot to span as off-phase (undefined) columns.
+    const breakThreshold = interval * 2;
     for (let index = 1; index < validTimes.length; index += 1) {
       const previous = validTimes[index - 1];
       const current = validTimes[index];
-      if (current - previous <= interval + tolerance) continue;
+      if (current - previous <= breakThreshold) continue;
 
-      // A single null between two points is enough to break the line, and uPlot
-      // positions samples by timestamp so the gap width is unaffected by the
-      // sentinel count. Cap per gap so a long outage (e.g. days at a 60s interval)
-      // can't generate thousands of points and balloon render cost.
+      // One null is enough to break the line. Mark THIS task broken inside the gap:
+      // if another task already has an anchor here, set the null on it (no
+      // near-duplicate column); otherwise add a per-task sentinel — merged, never
+      // overwritten, so simultaneous outages on multiple tasks all survive. Capped
+      // per gap so a long outage can't balloon the point count.
       let added = 0;
       for (
         let expected = previous + interval;
         expected < current - tolerance && added < MAX_SENTINELS_PER_GAP;
         expected += interval
       ) {
-        if (hasPointNearTime(existingTimes, expected, tolerance) || sentinels.has(expected)) {
-          continue;
+        const nearIdx = findPointNearTime(existingTimes, expected, tolerance);
+        if (nearIdx >= 0) {
+          sortedPoints[nearIdx][key] = null;
+        } else {
+          const sentinel = sentinels.get(expected) ?? { time: expected };
+          sentinel[key] = null;
+          sentinels.set(expected, sentinel);
         }
-        sentinels.set(expected, { time: expected });
         added += 1;
       }
     }
@@ -196,7 +224,7 @@ export function insertMetricGapSentinels(
     return sortedPoints;
   }
 
-  return normalizePoints([...sortedPoints, ...sentinels.values()]).points;
+  return normalizePoints([...sortedPoints, ...sentinels.values()], true).points;
 }
 
 export function interpolateMetricGaps(

@@ -155,8 +155,11 @@ export function PingChart({
       matchToleranceRatio: 0.25,
     });
     const times = chartPoints.map((point) => point.time);
+    // Keep undefined (off-phase anchor) distinct from null (real loss/gap): uPlot
+    // spans the former and breaks at the latter. Coalescing to null here is exactly
+    // what used to shred multi-task lines into nothing.
     const perTask = taskKeys.map((taskKey) =>
-      chartPoints.map((point) => point[taskKey] ?? null),
+      chartPoints.map((point) => point[taskKey]),
     );
 
     return [times, ...perTask] as uPlot.AlignedData;

@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
   Cpu,
@@ -502,6 +502,33 @@ const NodeHealthSection = memo(function NodeHealthSection({
   );
 });
 
+// Shared by the visible footer row and the off-screen measurement row so a style
+// tweak can't drift between the two. The measurement row omits `title` (aria-hidden).
+function FooterTagChip({ tag, titled }: { tag: DisplayTag; titled?: boolean }) {
+  return (
+    <span
+      data-tag={tag.color}
+      className="dstatus-tag-chip"
+      style={{ background: "var(--tag-bg)", color: "var(--tag-fg)" }}
+      title={titled ? tag.label : undefined}
+    >
+      {tag.label}
+    </span>
+  );
+}
+
+function FooterPriceChip({ renewalPrice, titled }: { renewalPrice: string; titled?: boolean }) {
+  return (
+    <span
+      className="dstatus-price-chip"
+      title={titled ? `续费价格 ${renewalPrice}` : undefined}
+    >
+      <CircleDollarSign size={12} strokeWidth={2.2} />
+      {renewalPrice}
+    </span>
+  );
+}
+
 function NodeCardFooter({
   expire,
   expireColor,
@@ -515,16 +542,66 @@ function NodeCardFooter({
   footerTags: DisplayTag[];
   renewalPrice: string | null;
 }) {
+  const rowRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLDivElement>(null);
+  const [visibleTagCount, setVisibleTagCount] = useState(footerTags.length);
+  const visibleTags = footerTags.slice(0, visibleTagCount);
+
+  useLayoutEffect(() => {
+    const row = rowRef.current;
+    const measure = measureRef.current;
+    if (!row || !measure) return;
+
+    // The inter-chip gap is a constant CSS token, so read it once per effect run
+    // instead of on every resize tick.
+    const styles = window.getComputedStyle(measure);
+    const gap = Number.parseFloat(styles.columnGap || styles.gap || "0") || 0;
+
+    const updateVisibleTags = () => {
+      const availableWidth = row.clientWidth;
+      const children = Array.from(measure.children) as HTMLElement[];
+      const tagWidths = children.slice(0, footerTags.length).map((child) => child.offsetWidth);
+      const priceWidth = renewalPrice ? (children[footerTags.length]?.offsetWidth ?? 0) : 0;
+
+      let usedWidth = renewalPrice ? priceWidth : 0;
+      let nextVisibleCount = 0;
+
+      for (const width of tagWidths) {
+        const nextWidth = usedWidth + (usedWidth > 0 ? gap : 0) + width;
+        if (nextWidth > availableWidth) break;
+        usedWidth = nextWidth;
+        nextVisibleCount += 1;
+      }
+
+      // Never collapse to an empty row: if even the first tag is wider than the
+      // space left after the price chip, still show it and let CSS ellipsis it.
+      if (nextVisibleCount === 0 && tagWidths.length > 0) nextVisibleCount = 1;
+
+      setVisibleTagCount((current) =>
+        current === nextVisibleCount ? current : nextVisibleCount,
+      );
+    };
+
+    updateVisibleTags();
+
+    let cancelled = false;
+    const observer = new ResizeObserver(updateVisibleTags);
+    observer.observe(row);
+    // Font swap can change tag widths after first paint; re-measure once ready,
+    // but bail if the card unmounted before the promise resolved.
+    document.fonts?.ready.then(() => {
+      if (!cancelled) updateVisibleTags();
+    });
+
+    return () => {
+      cancelled = true;
+      observer.disconnect();
+    };
+  }, [footerTags, renewalPrice]);
+
   return (
     <div className="server-card-footer">
       <div className="server-card-meta-grid">
-        <FooterStat
-          icon={<Calendar size={13} strokeWidth={2} />}
-          label="到期"
-          value={expire.value}
-          unit={expire.unit}
-          color={expireColor}
-        />
         <FooterStat
           icon={<RefreshCw size={13} strokeWidth={2} />}
           label="在线"
@@ -532,33 +609,29 @@ function NodeCardFooter({
           unit={uptime.unit}
           color="var(--progress-cpu)"
         />
+        <FooterStat
+          icon={<Calendar size={13} strokeWidth={2} />}
+          label="到期"
+          value={expire.value}
+          unit={expire.unit}
+          color={expireColor}
+        />
       </div>
       {(footerTags.length > 0 || renewalPrice) && (
-        <div className="dstatus-tags-row">
-          {footerTags.slice(0, 6).map((tag, index) => (
-            <span
-              key={`${tag.label}-${index}`}
-              data-tag={tag.color}
-              className="dstatus-tag-chip"
-              style={{
-                background: "var(--tag-bg)",
-                color: "var(--tag-fg)",
-              }}
-              title={tag.label}
-            >
-              {tag.label}
-            </span>
-          ))}
-          {footerTags.length > 6 && (
-            <span className="dstatus-tag-more">+{footerTags.length - 6}</span>
-          )}
-          {renewalPrice && (
-            <span className="dstatus-price-chip" title={`续费价格 ${renewalPrice}`}>
-              <CircleDollarSign size={12} strokeWidth={2.2} />
-              {renewalPrice}
-            </span>
-          )}
-        </div>
+        <>
+          <div className="dstatus-tags-row" ref={rowRef}>
+            {visibleTags.map((tag, index) => (
+              <FooterTagChip key={`${tag.label}-${index}`} tag={tag} titled />
+            ))}
+            {renewalPrice && <FooterPriceChip renewalPrice={renewalPrice} titled />}
+          </div>
+          <div className="dstatus-tags-row dstatus-tags-measure" ref={measureRef} aria-hidden>
+            {footerTags.map((tag, index) => (
+              <FooterTagChip key={`${tag.label}-${index}`} tag={tag} />
+            ))}
+            {renewalPrice && <FooterPriceChip renewalPrice={renewalPrice} />}
+          </div>
+        </>
       )}
     </div>
   );

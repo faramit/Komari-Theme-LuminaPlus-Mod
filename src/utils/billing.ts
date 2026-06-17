@@ -1,3 +1,5 @@
+import { getExpireDaysRemaining, LONG_TERM_EXPIRE_DAYS } from "@/utils/format";
+
 const INT_PRICE_FORMATTER = new Intl.NumberFormat("zh-CN", {
   minimumFractionDigits: 0,
   maximumFractionDigits: 2,
@@ -9,6 +11,12 @@ const DECIMAL_PRICE_FORMATTER = new Intl.NumberFormat("zh-CN", {
 
 function formatPriceNumber(value: number) {
   return (Number.isInteger(value) ? INT_PRICE_FORMATTER : DECIMAL_PRICE_FORMATTER).format(value);
+}
+
+function isLongTermExpire(value: string | number | null | undefined) {
+  if (value == null) return false;
+  const days = getExpireDaysRemaining(String(value));
+  return days != null && days > LONG_TERM_EXPIRE_DAYS;
 }
 
 export function formatBillingCycle(value: string | number | null | undefined) {
@@ -40,12 +48,17 @@ export function formatRenewalPrice({
   price,
   currency,
   billing_cycle,
+  expired_at,
 }: {
   price: number;
   currency: string;
   billing_cycle?: string | number | null;
+  expired_at?: string | number | null;
 }) {
-  if (!Number.isFinite(price) || price <= 0) return null;
+  if (!Number.isFinite(price)) return null;
+  if (price === -1) return "免费";
+  if (price === 0) return isLongTermExpire(expired_at) ? "免费" : null;
+  if (price < 0) return null;
 
   const symbol = currency?.trim() || "¥";
   const cycle = formatBillingCycle(billing_cycle);

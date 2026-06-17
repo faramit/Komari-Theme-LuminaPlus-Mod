@@ -1,4 +1,5 @@
 import type { NodeInfo } from "@/types/komari";
+import { resolveExpireTimestamp } from "@/utils/format";
 
 const COST_TARGET_CURRENCY = "CNY";
 export const DEFAULT_COST_RATE_API_URL = "https://api.frankfurter.dev/v2/rates?base=USD";
@@ -69,6 +70,8 @@ interface CostSummary {
 interface CostSummaryDetail {
   uuid: string;
   name: string;
+  region: string;
+  expiredAt: string;
   weight: number;
   priceCny: number;
   monthlyCny: number;
@@ -113,8 +116,11 @@ export function normalizeCostRateApiUrl(value: unknown): string {
 }
 
 function currencyCode(value: unknown) {
-  const raw = String(value || "$").trim();
-  if (!raw) return "USD";
+  const raw = String(value ?? "").trim();
+  // An unset currency is assumed to be the operator's target currency (CNY), not
+  // USD — defaulting to USD silently multiplied blank-currency, CNY-priced nodes
+  // by the USD rate (~7×) in the totals and remaining value.
+  if (!raw) return COST_TARGET_CURRENCY;
 
   const key = raw.toUpperCase().replace(/\s+/g, "").replace("＄", "$");
   return CURRENCY_ALIASES[key] || (/^[A-Z]{3}$/.test(key) ? key : "");
@@ -148,17 +154,21 @@ function billingCycleDays(value: unknown): number {
 function cycleMonths(days: number) {
   if (days === 365 || days === 360) return 12;
   if (days === 30) return 1;
+  // Whole-year multiples (2yr=730, 3yr=1095, …) annualize exactly via /365 rather
+  // than the /30 fallback, which drifts ~1.4% low on multi-year cycles.
+  if (days > 0 && days % 365 === 0) return (days / 365) * 12;
   if (days > 0) return days / 30;
   return 0;
 }
 
 function remainingCycleValue(price: number, cycleDays: number, expiredAt: unknown) {
-  if (!expiredAt) return 0;
+  const expiresMs = resolveExpireTimestamp(expiredAt as string | number | null | undefined);
+  // No real expiry (unset / lifetime / Go zero-time sentinel): treat it like the
+  // >100-year case below — a lifetime / one-time purchase still carries one cycle's
+  // worth of prepaid value rather than silently dropping out of the remaining total.
+  if (expiresMs == null) return price;
 
-  const expires = new Date(String(expiredAt));
-  if (Number.isNaN(expires.getTime())) return 0;
-
-  const diffMs = expires.getTime() - Date.now();
+  const diffMs = expiresMs - Date.now();
   if (diffMs <= 0) return 0;
 
   // A node whose expiry is >100 years out is a long-term / one-time purchase
@@ -325,6 +335,8 @@ export function calculateCostSummary(
     const baseDetail = {
       uuid: node.uuid,
       name: String(name || "未命名服务器"),
+      region: String(node.region || ""),
+      expiredAt: String(node.expired_at || ""),
       weight: Number(node.weight) || 0,
       priceCny: 0,
       monthlyCny: 0,

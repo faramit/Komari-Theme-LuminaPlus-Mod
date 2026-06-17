@@ -53,6 +53,32 @@ describe("calculateCostSummary", () => {
     expect(summary.remainingCny).toBeCloseTo(70, 5);
   });
 
+  it("counts a no-expiry node as one cycle of remaining value, not zero", () => {
+    // Regression: never-expiring nodes (Go zero-time / 0 / -1 / unset) used to be
+    // read as 已过期 and drop their prepaid value from 剩余价值 entirely.
+    for (const sentinel of ["0001-01-01T00:00:00Z", "0", "-1", ""]) {
+      const summary = calculateCostSummary(
+        [node({ price: 10, currency: "USD", billing_cycle: 30, expired_at: sentinel })],
+        [],
+        RATES,
+      );
+      expect(summary.paidCount).toBe(1);
+      // 10 USD × 7 = 70 CNY = one cycle's worth (matches the >100y lifetime case).
+      expect(summary.remainingCny).toBeCloseTo(70, 5);
+    }
+  });
+
+  it("treats an unset currency as the target currency (CNY), not USD", () => {
+    // Regression: blank currency defaulted to USD, inflating a CNY-priced node ~7×.
+    const summary = calculateCostSummary(
+      [node({ price: 100, currency: "", billing_cycle: "monthly" })],
+      [],
+      RATES,
+    );
+    expect(summary.skippedCount).toBe(0);
+    expect(summary.monthlyCny).toBeCloseTo(100, 6);
+  });
+
   it("counts free nodes separately and excludes them from totals", () => {
     const summary = calculateCostSummary(
       [node({ uuid: "free", price: 0 })],

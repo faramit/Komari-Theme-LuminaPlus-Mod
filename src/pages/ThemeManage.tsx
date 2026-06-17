@@ -50,6 +50,12 @@ import {
   type NodeViewMode,
   type ResolvedThemeSettings,
 } from "@/utils/themeSettings";
+import {
+  getDefaultOverviewRatingLabelText,
+  OVERVIEW_RATING_STYLES,
+  type OverviewRatingKind,
+  type OverviewRatingStyle,
+} from "@/utils/overviewRating";
 
 const APPEARANCE_OPTIONS = [
   { value: "light", label: "浅色", icon: Sun },
@@ -60,6 +66,15 @@ const NODE_VIEW_MODE_OPTIONS = [
   { value: "large", label: "大卡片", icon: LayoutGrid },
   { value: "compact", label: "小卡片", icon: Rows3 },
 ] as const;
+
+const OVERVIEW_RATING_LABEL_FIELDS: Array<{
+  key: OverviewRatingKind;
+  title: string;
+}> = [
+  { key: "traffic", title: "累计流量评级名称" },
+  { key: "bandwidth", title: "实时带宽评级名称" },
+  { key: "asset", title: "资产评级名称" },
+];
 
 function sortTasks(tasks: PingTask[]) {
   return [...tasks].sort((left, right) => {
@@ -178,8 +193,17 @@ function pickManagedThemeSettings(settings: ResolvedThemeSettings): ThemeSetting
     moveOfflineNodesBack: settings.moveOfflineNodesBack,
     showCostSummary: settings.showCostSummary,
     showCostSummaryFloatingButton: settings.showCostSummaryFloatingButton,
+    showOverviewRatings: settings.showOverviewRatings,
+    overviewRatingStyle: settings.overviewRatingStyle,
+    showTrafficRating: settings.showTrafficRating,
+    showBandwidthRating: settings.showBandwidthRating,
+    showAssetRating: settings.showAssetRating,
+    trafficRatingLabels: settings.trafficRatingLabels,
+    bandwidthRatingLabels: settings.bandwidthRatingLabels,
+    assetRatingLabels: settings.assetRatingLabels,
     compactShowTrafficTotal: settings.compactShowTrafficTotal,
     compactShowBilling: settings.compactShowBilling,
+    compactShowUptime: settings.compactShowUptime,
     showConnections: settings.showConnections,
     costIgnoredNodes: settings.costIgnoredNodes,
     costRateApiUrl: settings.costRateApiUrl,
@@ -205,8 +229,18 @@ export function ThemeManage() {
   const [draftShowCostSummary, setDraftShowCostSummary] = useState(true);
   const [draftShowCostSummaryFloatingButton, setDraftShowCostSummaryFloatingButton] =
     useState(true);
+  const [draftShowOverviewRatings, setDraftShowOverviewRatings] = useState(true);
+  const [draftOverviewRatingStyle, setDraftOverviewRatingStyle] =
+    useState<OverviewRatingStyle>("plain");
+  const [draftShowTrafficRating, setDraftShowTrafficRating] = useState(true);
+  const [draftShowBandwidthRating, setDraftShowBandwidthRating] = useState(true);
+  const [draftShowAssetRating, setDraftShowAssetRating] = useState(true);
+  const [draftTrafficRatingLabels, setDraftTrafficRatingLabels] = useState("");
+  const [draftBandwidthRatingLabels, setDraftBandwidthRatingLabels] = useState("");
+  const [draftAssetRatingLabels, setDraftAssetRatingLabels] = useState("");
   const [draftCompactShowTrafficTotal, setDraftCompactShowTrafficTotal] = useState(true);
   const [draftCompactShowBilling, setDraftCompactShowBilling] = useState(true);
+  const [draftCompactShowUptime, setDraftCompactShowUptime] = useState(true);
   const [draftShowConnections, setDraftShowConnections] = useState(false);
   const [draftCostIgnoredText, setDraftCostIgnoredText] = useState("");
   const [draftCostRateApiUrl, setDraftCostRateApiUrl] = useState(
@@ -270,8 +304,17 @@ export function ThemeManage() {
     setDraftMoveOfflineNodesBack(next.moveOfflineNodesBack);
     setDraftShowCostSummary(next.showCostSummary);
     setDraftShowCostSummaryFloatingButton(next.showCostSummaryFloatingButton);
+    setDraftShowOverviewRatings(next.showOverviewRatings);
+    setDraftOverviewRatingStyle(next.overviewRatingStyle);
+    setDraftShowTrafficRating(next.showTrafficRating);
+    setDraftShowBandwidthRating(next.showBandwidthRating);
+    setDraftShowAssetRating(next.showAssetRating);
+    setDraftTrafficRatingLabels(next.trafficRatingLabels);
+    setDraftBandwidthRatingLabels(next.bandwidthRatingLabels);
+    setDraftAssetRatingLabels(next.assetRatingLabels);
     setDraftCompactShowTrafficTotal(next.compactShowTrafficTotal);
     setDraftCompactShowBilling(next.compactShowBilling);
+    setDraftCompactShowUptime(next.compactShowUptime);
     setDraftShowConnections(next.showConnections);
     setDraftCostIgnoredText(next.costIgnoredNodes.join("\n"));
     setDraftCostRateApiUrl(next.costRateApiUrl);
@@ -359,8 +402,17 @@ export function ThemeManage() {
       moveOfflineNodesBack: draftMoveOfflineNodesBack,
       showCostSummary: draftShowCostSummary,
       showCostSummaryFloatingButton: draftShowCostSummaryFloatingButton,
+      showOverviewRatings: draftShowOverviewRatings,
+      overviewRatingStyle: draftOverviewRatingStyle,
+      showTrafficRating: draftShowTrafficRating,
+      showBandwidthRating: draftShowBandwidthRating,
+      showAssetRating: draftShowAssetRating,
+      trafficRatingLabels: draftTrafficRatingLabels,
+      bandwidthRatingLabels: draftBandwidthRatingLabels,
+      assetRatingLabels: draftAssetRatingLabels,
       compactShowTrafficTotal: draftCompactShowTrafficTotal,
       compactShowBilling: draftCompactShowBilling,
+      compactShowUptime: draftCompactShowUptime,
       showConnections: draftShowConnections,
       costIgnoredNodes: draftCostIgnoredNodes,
       costRateApiUrl: normalizedDraftCostRateApiUrl,
@@ -376,8 +428,17 @@ export function ThemeManage() {
       draftMoveOfflineNodesBack,
       draftShowCostSummary,
       draftShowCostSummaryFloatingButton,
+      draftShowOverviewRatings,
+      draftOverviewRatingStyle,
+      draftShowTrafficRating,
+      draftShowBandwidthRating,
+      draftShowAssetRating,
+      draftTrafficRatingLabels,
+      draftBandwidthRatingLabels,
+      draftAssetRatingLabels,
       draftCompactShowTrafficTotal,
       draftCompactShowBilling,
+      draftCompactShowUptime,
       draftShowConnections,
       draftCostIgnoredNodes,
       normalizedDraftCostRateApiUrl,
@@ -477,6 +538,16 @@ export function ThemeManage() {
     (clientsError instanceof Error ? clientsError.message : null);
   const noTasksYet = !tasksLoading && !clientsLoading && sortedTasks.length === 0;
   const noFilteredTaskMatch = !tasksLoading && !clientsLoading && !noTasksYet && filteredTasks.length === 0;
+  const ratingLabelDraftByKind: Record<OverviewRatingKind, string> = {
+    traffic: draftTrafficRatingLabels,
+    bandwidth: draftBandwidthRatingLabels,
+    asset: draftAssetRatingLabels,
+  };
+  const setRatingLabelDraft = (kind: OverviewRatingKind, value: string) => {
+    if (kind === "traffic") setDraftTrafficRatingLabels(value);
+    else if (kind === "bandwidth") setDraftBandwidthRatingLabels(value);
+    else setDraftAssetRatingLabels(value);
+  };
 
   return (
     <div className="flex flex-col gap-5 py-2">
@@ -737,6 +808,107 @@ export function ThemeManage() {
             </ul>
           )}
         </div>
+
+        <div className="mt-4 surface-inset px-4 py-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <span className="min-w-0">
+              <span className="block text-[13px] font-semibold text-[var(--text-primary)]">
+                总览评级
+              </span>
+              <span className="mt-1 block text-[11px] text-[var(--text-tertiary)]">
+                在累计流量、实时带宽、资产概览右下角显示文字评级；名称用英文逗号分隔，只取前四个。
+              </span>
+            </span>
+            <label className="inline-flex shrink-0 items-center gap-2 text-[12px] font-medium text-[var(--text-secondary)]">
+              <span>启用</span>
+              <input
+                type="checkbox"
+                checked={draftShowOverviewRatings}
+                onChange={(event) => setDraftShowOverviewRatings(event.target.checked)}
+                className="h-4 w-4 accent-[var(--accent-500)]"
+              />
+            </label>
+          </div>
+
+          <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+            <div className="flex flex-col gap-3">
+              <div>
+                <div className="mb-2 text-[12px] font-medium text-[var(--text-secondary)]">
+                  评级风格
+                </div>
+                <div className="instance-segmented is-scrollable">
+                  {OVERVIEW_RATING_STYLES.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      data-active={draftOverviewRatingStyle === option.value ? "true" : "false"}
+                      aria-pressed={draftOverviewRatingStyle === option.value}
+                      disabled={!draftShowOverviewRatings}
+                      onClick={() => setDraftOverviewRatingStyle(option.value)}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <label className="flex items-center justify-between gap-2 rounded-[10px] border border-[var(--hairline)] px-3 py-2 text-[12px] text-[var(--text-secondary)]">
+                  <span>累计流量</span>
+                  <input
+                    type="checkbox"
+                    checked={draftShowTrafficRating}
+                    disabled={!draftShowOverviewRatings}
+                    onChange={(event) => setDraftShowTrafficRating(event.target.checked)}
+                    className="h-4 w-4 accent-[var(--accent-500)]"
+                  />
+                </label>
+                <label className="flex items-center justify-between gap-2 rounded-[10px] border border-[var(--hairline)] px-3 py-2 text-[12px] text-[var(--text-secondary)]">
+                  <span>实时带宽</span>
+                  <input
+                    type="checkbox"
+                    checked={draftShowBandwidthRating}
+                    disabled={!draftShowOverviewRatings}
+                    onChange={(event) => setDraftShowBandwidthRating(event.target.checked)}
+                    className="h-4 w-4 accent-[var(--accent-500)]"
+                  />
+                </label>
+                <label className="flex items-center justify-between gap-2 rounded-[10px] border border-[var(--hairline)] px-3 py-2 text-[12px] text-[var(--text-secondary)]">
+                  <span>资产概览</span>
+                  <input
+                    type="checkbox"
+                    checked={draftShowAssetRating}
+                    disabled={!draftShowOverviewRatings}
+                    onChange={(event) => setDraftShowAssetRating(event.target.checked)}
+                    className="h-4 w-4 accent-[var(--accent-500)]"
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              {OVERVIEW_RATING_LABEL_FIELDS.map((field) => (
+                <label key={field.key} className="flex min-w-0 flex-col gap-2">
+                  <span className="text-[12px] font-medium text-[var(--text-secondary)]">
+                    {field.title}
+                  </span>
+                  <input
+                    value={ratingLabelDraftByKind[field.key]}
+                    disabled={!draftShowOverviewRatings}
+                    onChange={(event) => setRatingLabelDraft(field.key, event.target.value)}
+                    placeholder={getDefaultOverviewRatingLabelText(
+                      field.key,
+                      draftOverviewRatingStyle,
+                    )}
+                    className="surface-inset w-full px-3 py-2 text-[13px] outline-none disabled:opacity-60"
+                  />
+                  <span className="text-[11px] text-[var(--text-tertiary)]">
+                    例如: {getDefaultOverviewRatingLabelText(field.key, draftOverviewRatingStyle)}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
       </InstancePanel>
 
       <InstancePanel
@@ -774,6 +946,22 @@ export function ThemeManage() {
               type="checkbox"
               checked={draftCompactShowBilling}
               onChange={(event) => setDraftCompactShowBilling(event.target.checked)}
+              className="h-4 w-4 shrink-0 accent-[var(--accent-500)]"
+            />
+          </label>
+          <label className="surface-inset flex items-center justify-between gap-3 px-4 py-3">
+            <span className="min-w-0">
+              <span className="block text-[13px] font-medium text-[var(--text-primary)]">
+                显示在线时间
+              </span>
+              <span className="mt-1 block text-[11px] text-[var(--text-tertiary)]">
+                在小卡片流量栏右侧展示在线时长。默认开启。
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              checked={draftCompactShowUptime}
+              onChange={(event) => setDraftCompactShowUptime(event.target.checked)}
               className="h-4 w-4 shrink-0 accent-[var(--accent-500)]"
             />
           </label>

@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CircleDollarSign, RefreshCw, X } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  CircleDollarSign,
+  RefreshCw,
+  X,
+} from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { Flag } from "@/components/ui/Flag";
 import { useAllNodeMeta } from "@/hooks/useNode";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import {
@@ -8,17 +15,47 @@ import {
   formatCnyMoney,
   getExchangeRates,
 } from "@/utils/cost";
+import { getExpireDaysRemaining, LONG_TERM_EXPIRE_DAYS } from "@/utils/format";
+
+type CostSortField = "weight" | "price" | "remain";
+type CostSortDirection = "asc" | "desc";
+
+const COST_SORT_OPTIONS: Array<{ field: CostSortField; label: string }> = [
+  { field: "weight", label: "权重" },
+  { field: "price", label: "价格" },
+  { field: "remain", label: "剩余" },
+];
+
+function formatCostCycle(days: number) {
+  if (days === -1) return "永久";
+  if (days === 30) return "月";
+  if (days === 90) return "季";
+  if (days === 180) return "半年";
+  if (days === 365 || days === 360) return "年";
+  return days > 0 ? `${days}天` : "年";
+}
+
+function formatCostExpiry(expiredAt: string) {
+  const days = getExpireDaysRemaining(expiredAt);
+  if (days == null) return "到期未知";
+  if (days > LONG_TERM_EXPIRE_DAYS) return "长期";
+  if (days < 0) return "已过期";
+  if (days === 0) return "今日到期";
+  return `${days} 天后到期`;
+}
 
 function CostMetric({
   label,
   value,
+  valueTone,
 }: {
   label: string;
   value: string;
+  valueTone?: "green";
 }) {
   return (
-    <div className="cost-summary-metric">
-      <span>{label}</span>
+    <div className="cost-summary-metric" data-value-tone={valueTone}>
+      <span className="cost-summary-metric-label">{label}</span>
       <strong>{value}</strong>
     </div>
   );
@@ -40,7 +77,8 @@ export function CostSummary({
   const setOpen = onOpenChange ?? setInternalOpen;
   const panelRef = useRef<HTMLElement | null>(null);
   const launcherRef = useRef<HTMLButtonElement | null>(null);
-  const [sortBy, setSortBy] = useState("weight_asc");
+  const [sortField, setSortField] = useState<CostSortField>("weight");
+  const [sortDirection, setSortDirection] = useState<CostSortDirection>("asc");
   const hiddenTabIndex = resolvedOpen ? undefined : -1;
   const nodes = useAllNodeMeta();
   const themeSettings = useThemeSettings();
@@ -67,14 +105,22 @@ export function CostSummary({
   const detailRows = useMemo(() => {
     const rows = summary?.details.slice() ?? [];
     return rows.sort((a, b) => {
-      if (sortBy === "weight_desc") return b.weight - a.weight;
-      if (sortBy === "price_asc") return a.priceCny - b.priceCny;
-      if (sortBy === "price_desc") return b.priceCny - a.priceCny;
-      if (sortBy === "remain_asc") return a.remainingCny - b.remainingCny;
-      if (sortBy === "remain_desc") return b.remainingCny - a.remainingCny;
-      return a.weight - b.weight;
+      const left =
+        sortField === "price"
+          ? a.priceCny
+          : sortField === "remain"
+            ? a.remainingCny
+            : a.weight;
+      const right =
+        sortField === "price"
+          ? b.priceCny
+          : sortField === "remain"
+            ? b.remainingCny
+            : b.weight;
+      const direction = sortDirection === "asc" ? 1 : -1;
+      return (left - right) * direction || a.name.localeCompare(b.name, "zh-CN");
     });
-  }, [sortBy, summary]);
+  }, [sortDirection, sortField, summary]);
   const exchangeRateRows = useMemo(() => {
     if (!rate?.rates.CNY) return [];
 
@@ -89,17 +135,13 @@ export function CostSummary({
       })
       .filter((item): item is { code: string; value: number } => Boolean(item));
   }, [rate]);
-  const statusParts = [
-    rate
-      ? `${rate.stale ? "缓存汇率" : "实时汇率"} ${rate.date || "latest"}`
-      : rateQuery.isLoading
-        ? "汇率加载中"
-        : "汇率获取失败",
-    summary ? `计费 ${summary.paidCount}` : "",
-    summary && summary.freeCount > 0 ? `免费 ${summary.freeCount}` : "",
-    summary && summary.ignoredCount > 0 ? `忽略 ${summary.ignoredCount}` : "",
-    summary && summary.skippedCount > 0 ? `跳过 ${summary.skippedCount}` : "",
-  ].filter(Boolean);
+  const exchangeRateSummary =
+    exchangeRateRows.length > 0
+      ? exchangeRateRows
+          .slice(0, 3)
+          .map((item) => `${item.code} ${formatCnyMoney(item.value)}`)
+          .join(" · ")
+      : "暂无汇率";
 
   useEffect(() => {
     if (!resolvedOpen) return;
@@ -124,6 +166,16 @@ export function CostSummary({
     };
   }, [resolvedOpen, setOpen]);
 
+  // While the mobile bottom-sheet is open, fold away the home floating controls:
+  // they're pinned top-right at a higher z-index and otherwise overlap the sheet's
+  // close button, stealing the tap. CSS scopes the actual hiding to the sheet
+  // breakpoint; the class is harmless on desktop where the two don't overlap.
+  useEffect(() => {
+    if (!resolvedOpen) return;
+    document.body.classList.add("cost-summary-open");
+    return () => document.body.classList.remove("cost-summary-open");
+  }, [resolvedOpen]);
+
   if (!enabled) {
     return null;
   }
@@ -137,96 +189,7 @@ export function CostSummary({
         aria-hidden={!resolvedOpen}
       >
         <div className="cost-summary-header">
-          <h3 className="cost-summary-title">
-            <span className="cost-summary-icon" aria-hidden>
-              <CircleDollarSign size={18} />
-            </span>
-            资产统计
-          </h3>
-          <button
-            type="button"
-            className="cost-summary-close"
-            onClick={() => setOpen(false)}
-            aria-label="关闭服务器花费"
-            title="关闭"
-            tabIndex={hiddenTabIndex}
-          >
-            <X size={18} />
-          </button>
-        </div>
-        <div className="cost-summary-content">
-          <CostMetric
-            label="服务器数量"
-            value={summary ? `${summary.nodeCount}` : "计算中"}
-          />
-          <CostMetric
-            label="年化总支出"
-            value={summary ? formatCnyMoney(summary.totalCny) : "计算中"}
-          />
-          <CostMetric
-            label="月均支出"
-            value={summary ? formatCnyMoney(summary.monthlyCny) : "--"}
-          />
-          <CostMetric
-            label="剩余价值"
-            value={summary ? formatCnyMoney(summary.remainingCny) : "--"}
-          />
-          <div className="cost-summary-detail-list" aria-label="服务器剩余价值明细">
-            {summary ? (
-              detailRows.map((detail) => (
-                <div
-                  key={detail.uuid}
-                  className="cost-summary-detail-item"
-                  data-counted={detail.counted}
-                  title={detail.name}
-                >
-                  <div className="cost-summary-detail-name">
-                    <span>{detail.name}</span>
-                    {detail.note && <em>{detail.note}</em>}
-                  </div>
-                  <strong>{formatCnyMoney(detail.remainingCny)}</strong>
-                </div>
-              ))
-            ) : (
-              <div className="cost-summary-empty">费用明细加载中</div>
-            )}
-          </div>
-          <div className="cost-summary-status">{statusParts.join(" · ")}</div>
-          {exchangeRateRows.length > 0 && (
-            <div className="cost-summary-rate-list" aria-label="汇率">
-              {exchangeRateRows.map((item) => (
-                <div className="cost-summary-rate-item" key={item.code}>
-                  <span>1 {item.code}</span>
-                  <strong>{formatCnyMoney(item.value)}</strong>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="cost-summary-actions">
-          <select
-            className="cost-summary-select"
-            aria-label="显示币种"
-            value="CNY"
-            disabled
-            tabIndex={hiddenTabIndex}
-          >
-            <option value="CNY">CNY (￥)</option>
-          </select>
-          <select
-            className="cost-summary-select"
-            aria-label="排序"
-            value={sortBy}
-            onChange={(event) => setSortBy(event.target.value)}
-            tabIndex={hiddenTabIndex}
-          >
-            <option value="weight_asc">权重 正序</option>
-            <option value="weight_desc">权重 倒序</option>
-            <option value="price_asc">价格 正序</option>
-            <option value="price_desc">价格 倒序</option>
-            <option value="remain_asc">剩余 正序</option>
-            <option value="remain_desc">剩余 倒序</option>
-          </select>
+          <h3 className="cost-summary-title">资产统计</h3>
           <button
             type="button"
             className={`cost-summary-action${rateQuery.isFetching ? " is-spinning" : ""}`}
@@ -239,6 +202,120 @@ export function CostSummary({
           >
             <RefreshCw size={16} />
           </button>
+          <button
+            type="button"
+            className="cost-summary-close"
+            onClick={() => setOpen(false)}
+            aria-label="关闭服务器花费"
+            title="关闭"
+            tabIndex={hiddenTabIndex}
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="cost-summary-content">
+          <div className="cost-summary-metric-grid">
+            <CostMetric
+              label="服务器数量"
+              value={summary ? `${summary.nodeCount}` : "计算中"}
+            />
+            <CostMetric
+              label="年化总支出"
+              value={summary ? formatCnyMoney(summary.totalCny) : "计算中"}
+            />
+            <CostMetric
+              label="月均支出"
+              value={summary ? formatCnyMoney(summary.monthlyCny) : "--"}
+            />
+            <CostMetric
+              label="剩余价值"
+              value={summary ? formatCnyMoney(summary.remainingCny) : "--"}
+              valueTone="green"
+            />
+          </div>
+
+          <section className="cost-summary-detail-section" aria-label="服务器剩余价值明细">
+            <div className="cost-summary-section-head">
+              <div className="cost-summary-section-title">
+                <h4>资产明细</h4>
+              </div>
+              <div className="cost-summary-section-tools">
+                <div className="cost-summary-sort-tabs" role="group" aria-label="排序字段">
+                  {COST_SORT_OPTIONS.map((option) => (
+                    <button
+                      key={option.field}
+                      type="button"
+                      className="cost-summary-sort-tab"
+                      data-active={sortField === option.field}
+                      onClick={() => setSortField(option.field)}
+                      aria-pressed={sortField === option.field}
+                      tabIndex={hiddenTabIndex}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="cost-summary-action is-direction"
+                  onClick={() => setSortDirection((value) => (value === "asc" ? "desc" : "asc"))}
+                  aria-label={sortDirection === "asc" ? "切换为倒序" : "切换为正序"}
+                  title={sortDirection === "asc" ? "正序" : "倒序"}
+                  tabIndex={hiddenTabIndex}
+                >
+                  {sortDirection === "asc" ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                </button>
+              </div>
+            </div>
+            <div className="cost-summary-detail-list">
+              {summary ? (
+                detailRows.map((detail) => {
+                  const expiryLabel = formatCostExpiry(detail.expiredAt);
+                  const priceLabel =
+                    detail.note || `${formatCnyMoney(detail.priceCny)}/${formatCostCycle(detail.billingCycleDays)}`;
+                  return (
+                    <div
+                      key={detail.uuid}
+                      className="cost-summary-detail-item"
+                      data-counted={detail.counted}
+                      title={detail.name}
+                    >
+                      <div className="cost-summary-detail-name">
+                        <span className="cost-summary-detail-line">
+                          <Flag region={detail.region} size={12} />
+                          <span className="cost-summary-detail-title">{detail.name}</span>
+                          <span className="cost-summary-price-chip">{priceLabel}</span>
+                          <span className="cost-summary-expire-label">{expiryLabel}</span>
+                        </span>
+                      </div>
+                      <strong>{formatCnyMoney(detail.remainingCny)}</strong>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="cost-summary-empty">费用明细加载中</div>
+              )}
+            </div>
+          </section>
+
+          <details className="cost-summary-rate-details">
+            <summary tabIndex={hiddenTabIndex}>
+              <span>汇率</span>
+              <strong>{exchangeRateSummary}</strong>
+            </summary>
+            {exchangeRateRows.length > 0 ? (
+              <div className="cost-summary-rate-list" aria-label="汇率">
+                {exchangeRateRows.map((item) => (
+                  <div className="cost-summary-rate-item" key={item.code}>
+                    <span>1 {item.code}</span>
+                    <strong>{formatCnyMoney(item.value)}</strong>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="cost-summary-empty is-compact">暂无可用汇率</div>
+            )}
+          </details>
         </div>
       </section>
       {showLauncher && (

@@ -7,6 +7,7 @@ import {
   formatTrafficRateLabel,
   getExpireDaysRemaining,
   parseTags,
+  resolveExpireTimestamp,
 } from "@/utils/format";
 
 const KB = 1024;
@@ -75,6 +76,26 @@ describe("getExpireDaysRemaining / formatExpireDays", () => {
     expect(getExpireDaysRemaining(null)).toBeNull();
     expect(getExpireDaysRemaining("not-a-date")).toBeNull();
     expect(formatExpireDays(null)).toEqual({ value: "—", unit: "", tone: "none" });
+  });
+
+  it("treats Komari 'no expiry' sentinels as no-expiry, not as 已过期", () => {
+    // Regression: the Go zero-time and numeric 0 / -1 sentinels used to parse to
+    // year 1 / 2000 / 2001 and render never-expiring nodes "已过期".
+    for (const sentinel of ["0001-01-01T00:00:00Z", "0", "-1", ""]) {
+      expect(getExpireDaysRemaining(sentinel)).toBeNull();
+      expect(formatExpireDays(sentinel)).toEqual({ value: "—", unit: "", tone: "none" });
+    }
+  });
+
+  it("reads a bare positive number as a unix timestamp (seconds or ms)", () => {
+    const secs = Math.floor((Date.now() + 10 * 86_400_000) / 1000);
+    expect(getExpireDaysRemaining(String(secs))).toBe(10);
+    const ms = Date.now() + 5 * 86_400_000;
+    expect(getExpireDaysRemaining(String(ms))).toBe(5);
+    // Sentinels resolve to "no timestamp".
+    expect(resolveExpireTimestamp("0001-01-01T00:00:00Z")).toBeNull();
+    expect(resolveExpireTimestamp(0)).toBeNull();
+    expect(resolveExpireTimestamp(-1)).toBeNull();
   });
 
   it("maps day buckets to tones", () => {

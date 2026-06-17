@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ChevronLeft } from "lucide-react";
 import "uplot/dist/uPlot.min.css";
@@ -33,7 +33,11 @@ export function Instance() {
   );
   const showPingChart = themeSettings.isReady && themeSettings.showPingChart;
 
-  const alignCharts = () => {
+  // Stable identity: only reads a ref, so [] deps are safe. Passed as onNodeReady
+  // into InstanceDetails' effect — an unstable identity there made every parent
+  // re-render cancel the pending rAF without re-scheduling it, dropping the
+  // one-shot scroll-into-view.
+  const alignCharts = useCallback(() => {
     const frame = window.requestAnimationFrame(() => {
       const element = chartControlsRef.current;
       if (!element) return;
@@ -45,11 +49,11 @@ export function Instance() {
       element.scrollIntoView({ behavior: "auto", block: "start" });
     });
     return () => window.cancelAnimationFrame(frame);
-  };
+  }, []);
 
   useEffect(() => {
     return alignCharts();
-  }, [uuid]);
+  }, [alignCharts, uuid]);
 
   useEffect(() => {
     if (!loadRanges.some((range) => range.value === loadHours)) {

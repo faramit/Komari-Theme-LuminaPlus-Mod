@@ -47,10 +47,12 @@ export function InstanceDetails({
   );
   const lastUpdated =
     metrics.updatedAt > 0 ? TIME_FORMATTER.format(metrics.updatedAt) : "—";
+  const trimmedName = meta.name?.trim();
+  const panelTitle = trimmedName ? `${trimmedName} 信息` : "实例信息";
 
   return (
     <InstancePanel
-      title="实例信息"
+      title={panelTitle}
       description={
         isOnline ? undefined : "节点当前离线，以下展示最近一次上报的缓存数据。"
       }

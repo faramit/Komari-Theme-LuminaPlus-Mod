@@ -143,8 +143,17 @@ export interface ThemeSettings {
   moveOfflineNodesBack?: boolean;
   showCostSummary?: boolean;
   showCostSummaryFloatingButton?: boolean;
+  showOverviewRatings?: boolean;
+  overviewRatingStyle?: "plain" | "cultivation";
+  showTrafficRating?: boolean;
+  showBandwidthRating?: boolean;
+  showAssetRating?: boolean;
+  trafficRatingLabels?: string;
+  bandwidthRatingLabels?: string;
+  assetRatingLabels?: string;
   compactShowTrafficTotal?: boolean;
   compactShowBilling?: boolean;
+  compactShowUptime?: boolean;
   showConnections?: boolean;
   costIgnoredNodes?: string[];
   costRateApiUrl?: string;
