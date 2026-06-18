@@ -18,6 +18,7 @@ import {
   type PingTask,
   type PingBasicInfo,
 } from "@/types/komari";
+import { fetchWithTimeout } from "@/utils/abort";
 
 const ApiEnvelope = <T extends z.ZodTypeAny>(inner: T) =>
   z.object({
@@ -101,15 +102,15 @@ async function apiGet<T>(
   schema: z.ZodType<T>,
   options?: { signal?: AbortSignal; timeout?: number },
 ): Promise<T> {
-  const timeoutSignal = AbortSignal.timeout(options?.timeout ?? DEFAULT_API_TIMEOUT_MS);
-  const signal = options?.signal
-    ? AbortSignal.any([timeoutSignal, options.signal])
-    : timeoutSignal;
-  const resp = await fetch(path, {
-    credentials: "include",
-    headers: { Accept: "application/json" },
-    signal,
-  });
+  const resp = await fetchWithTimeout(
+    path,
+    {
+      credentials: "include",
+      headers: { Accept: "application/json" },
+    },
+    options?.timeout ?? DEFAULT_API_TIMEOUT_MS,
+    options?.signal,
+  );
   if (!resp.ok) {
     throw new ApiRequestError(`Request ${path} failed: ${resp.status}`, resp.status, path);
   }
@@ -315,16 +316,19 @@ export async function saveThemeSettings(
   theme: string,
   settings: Record<string, unknown>,
 ): Promise<void> {
-  const resp = await fetch(`/api/admin/theme/settings?theme=${encodeURIComponent(theme)}`, {
-    method: "POST",
-    credentials: "include",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
+  const resp = await fetchWithTimeout(
+    `/api/admin/theme/settings?theme=${encodeURIComponent(theme)}`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(settings),
     },
-    body: JSON.stringify(settings),
-    signal: AbortSignal.timeout(DEFAULT_API_TIMEOUT_MS),
-  });
+    DEFAULT_API_TIMEOUT_MS,
+  );
 
   if (!resp.ok) {
     let message = `Request /api/admin/theme/settings failed: ${resp.status}`;

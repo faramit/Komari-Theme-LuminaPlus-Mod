@@ -1,4 +1,5 @@
 import type { NodeInfo } from "@/types/komari";
+import { fetchWithTimeout } from "@/utils/abort";
 import { resolveExpireTimestamp } from "@/utils/format";
 
 const COST_TARGET_CURRENCY = "CNY";
@@ -110,9 +111,20 @@ export function normalizeCostIgnoredNodes(value: unknown): string[] {
   );
 }
 
+export function isCostRateApiUrlValid(value: string): boolean {
+  try {
+    const { protocol } = new URL(value);
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export function normalizeCostRateApiUrl(value: unknown): string {
   const raw = typeof value === "string" ? value.trim() : "";
-  return raw || DEFAULT_COST_RATE_API_URL;
+  // Fall back to the default endpoint for blank or non-http(s) values so a bad
+  // persisted setting can't reach fetch() (where it would throw every cycle).
+  return raw && isCostRateApiUrlValid(raw) ? raw : DEFAULT_COST_RATE_API_URL;
 }
 
 function currencyCode(value: unknown) {
@@ -277,10 +289,11 @@ export async function getExchangeRates(rateApiUrl: string): Promise<ExchangeRate
   if (cached) return cached;
 
   try {
-    const response = await fetch(rateApiUrl, {
-      cache: "no-store",
-      signal: AbortSignal.timeout(RATE_REQUEST_TIMEOUT_MS),
-    });
+    const response = await fetchWithTimeout(
+      rateApiUrl,
+      { cache: "no-store" },
+      RATE_REQUEST_TIMEOUT_MS,
+    );
     if (!response.ok) {
       throw new Error(`rate http ${response.status}`);
     }

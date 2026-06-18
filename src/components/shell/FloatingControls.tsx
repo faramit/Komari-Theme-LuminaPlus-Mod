@@ -15,25 +15,30 @@ const APPEARANCE_OPTIONS = [
 ] as const;
 
 export function FloatingControls() {
+  const [searchParams] = useSearchParams();
+  // Read the route before any node-store hook runs: the theme-manage view renders
+  // nothing here, and useNodeStoreStatus (below) would otherwise spin up the live
+  // node polling just to immediately discard it.
+  if (searchParams.get("view") === "theme-manage") {
+    return null;
+  }
+  return <FloatingControlsInner />;
+}
+
+function FloatingControlsInner() {
   const { appearance, setAppearance } = usePreferences();
   const { mode, toggleMode } = useViewMode();
   const { data: me } = useAuth();
   const themeSettings = useThemeSettings();
   const { failureStreak } = useNodeStoreStatus();
-  const [searchParams] = useSearchParams();
   const [collapsed, setCollapsed] = useState(true);
   const settingsReady = themeSettings.isReady;
   const showAdmin = settingsReady && themeSettings.enableAdminButton;
   const showThemeManage = Boolean(me?.logged_in);
-  const isThemeManageView = searchParams.get("view") === "theme-manage";
   const showSyncWarning = failureStreak >= 2;
   const hiddenTabIndex = collapsed ? -1 : undefined;
   const ToggleIcon = collapsed ? ChevronLeft : ChevronRight;
   const ViewIcon = mode === "compact" ? LayoutGrid : Rows3;
-
-  if (isThemeManageView) {
-    return null;
-  }
 
   return (
     <div
@@ -93,10 +98,7 @@ export function FloatingControls() {
                 aria-label="主题设置"
                 title="主题设置"
                 tabIndex={hiddenTabIndex}
-                className={clsx(
-                  "control-button grid h-9 w-9 place-items-center",
-                  isThemeManageView && "control-toggle is-active",
-                )}
+                className="control-button grid h-9 w-9 place-items-center"
               >
                 <SlidersHorizontal size={16} />
               </Link>

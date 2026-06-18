@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   calculateCostSummary,
   formatCnyMoney,
+  isCostRateApiUrlValid,
   normalizeCostIgnoredNodes,
   normalizeCostRateApiUrl,
   DEFAULT_COST_RATE_API_URL,
@@ -183,6 +184,19 @@ describe("cost helpers", () => {
   it("normalizeCostRateApiUrl falls back to the default", () => {
     expect(normalizeCostRateApiUrl("")).toBe(DEFAULT_COST_RATE_API_URL);
     expect(normalizeCostRateApiUrl("  https://x  ")).toBe("https://x");
+  });
+
+  it("normalizeCostRateApiUrl rejects non-http(s) values", () => {
+    expect(normalizeCostRateApiUrl("ftp://example.com")).toBe(DEFAULT_COST_RATE_API_URL);
+    expect(normalizeCostRateApiUrl("not a url")).toBe(DEFAULT_COST_RATE_API_URL);
+    expect(normalizeCostRateApiUrl("javascript:alert(1)")).toBe(DEFAULT_COST_RATE_API_URL);
+  });
+
+  it("isCostRateApiUrlValid accepts only http(s)", () => {
+    expect(isCostRateApiUrlValid("https://api.example.com/rates")).toBe(true);
+    expect(isCostRateApiUrlValid("http://localhost:8080")).toBe(true);
+    expect(isCostRateApiUrlValid("ftp://example.com")).toBe(false);
+    expect(isCostRateApiUrlValid("garbage")).toBe(false);
   });
 
   it("formatCnyMoney guards NaN and formats two decimals", () => {

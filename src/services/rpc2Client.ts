@@ -1,3 +1,5 @@
+import { fetchWithTimeout } from "@/utils/abort";
+
 type JsonRpcId = number | string;
 
 interface JsonRpcRequest<TParams = unknown> {
@@ -297,25 +299,25 @@ class RPC2Client {
   ): Promise<TResult> {
     const id = ++this.requestId;
     const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
-    const timeoutSignal = AbortSignal.timeout(timeoutMs);
-    const signal = options.signal
-      ? AbortSignal.any([timeoutSignal, options.signal])
-      : timeoutSignal;
-    const response = await fetch(this.baseUrl, {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
+    const response = await fetchWithTimeout(
+      this.baseUrl,
+      {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id,
+          method,
+          params,
+        } satisfies JsonRpcRequest<TParams>),
       },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id,
-        method,
-        params,
-      } satisfies JsonRpcRequest<TParams>),
-      signal,
-    });
+      timeoutMs,
+      options.signal,
+    );
 
     if (!response.ok) {
       throw new Error(`Request ${this.baseUrl} failed: ${response.status}`);

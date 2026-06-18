@@ -31,6 +31,7 @@ import {
 } from "@/services/api";
 import type { AdminClient, PingTask, ThemeSettings } from "@/types/komari";
 import {
+  isCostRateApiUrlValid,
   normalizeCostIgnoredNodes,
   normalizeCostRateApiUrl,
 } from "@/utils/cost";
@@ -386,6 +387,8 @@ export function ThemeManage() {
     [draftCostIgnoredText],
   );
   const normalizedDraftCostRateApiUrl = normalizeCostRateApiUrl(draftCostRateApiUrl);
+  const draftCostRateApiUrlInvalid =
+    draftCostRateApiUrl.trim() !== "" && !isCostRateApiUrlValid(draftCostRateApiUrl.trim());
 
   // The settings payload built from the current draft. It is the single source
   // for both the save request and the dirty check — adding a new setting means
@@ -1028,8 +1031,14 @@ export function ThemeManage() {
                 value={draftCostRateApiUrl}
                 onChange={(event) => setDraftCostRateApiUrl(event.target.value)}
                 placeholder={DEFAULT_THEME_SETTINGS.costRateApiUrl}
+                aria-invalid={draftCostRateApiUrlInvalid}
                 className="surface-inset w-full px-3 py-2 text-[13px] outline-none"
               />
+              {draftCostRateApiUrlInvalid && (
+                <span className="text-[12px] text-[var(--status-offline)]">
+                  请输入 http(s) 链接，保存后将回退默认接口
+                </span>
+              )}
             </label>
           </div>
           <label className="flex min-w-0 flex-col gap-2">

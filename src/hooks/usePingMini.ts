@@ -4,6 +4,7 @@ import { useVisibleNodeUuids } from "@/hooks/useNode";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { getPingOverview } from "@/services/api";
 import type { PingOverviewBucket, PingOverviewItem } from "@/types/komari";
+import { signalWithTimeout } from "@/utils/abort";
 import {
   invertHomepagePingTaskBindings,
   type HomepagePingTaskBindings,
@@ -199,11 +200,6 @@ function buildAssignmentKey(selectedTaskByClient: Map<string, number>) {
 // future polling is wedged. Racing each request guarantees the chain recovers.
 const PING_REQUEST_TIMEOUT_MS = 35_000;
 
-function withRequestTimeout(signal: AbortSignal | undefined, ms: number): AbortSignal {
-  const timeoutSignal = AbortSignal.timeout(ms);
-  return signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
-}
-
 async function buildOverviewMap(
   hours: number,
   clientUuids: string[],
@@ -234,7 +230,7 @@ async function buildOverviewMap(
 
   const overviewResults = await Promise.allSettled(
     selectedTaskIds.map(async (taskId) => {
-      const requestSignal = withRequestTimeout(signal, PING_REQUEST_TIMEOUT_MS);
+      const requestSignal = signalWithTimeout(signal, PING_REQUEST_TIMEOUT_MS);
       return {
         taskId,
         overview: await getPingOverview(hours, taskId, { signal: requestSignal }),

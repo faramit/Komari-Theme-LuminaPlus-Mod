@@ -501,6 +501,17 @@ function toTimestamp(value: string | number | undefined): number {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
+// Derive the TCP connection count from a flat latest-status payload. That
+// contract sends `connections` as TCP+UDP combined (see common.go) with no
+// `connections_tcp`, so reading `connections` straight as TCP inflated the
+// "TCP 连接" stat by the UDP count. Derive TCP as connections − udp, preferring an
+// explicit `connections_tcp` when a future backend supplies one. Exported for
+// unit testing.
+export function resolveFlatConnectionsTcp(payload: RealtimePayload): number {
+  if (payload.connections_tcp != null) return asNumber(payload.connections_tcp);
+  return Math.max(0, asNumber(payload.connections) - asNumber(payload.connections_udp));
+}
+
 function normalizeRealtime(
   raw: unknown,
   meta: NodeInfo,
@@ -583,7 +594,7 @@ function normalizeRealtime(
       totalDown: asNumber(payload.net_total_down),
     },
     connections: {
-      tcp: asNumber(payload.connections),
+      tcp: resolveFlatConnectionsTcp(payload),
       udp: asNumber(payload.connections_udp),
     },
     uptime: asNumber(payload.uptime),
