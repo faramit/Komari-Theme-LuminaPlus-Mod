@@ -21,8 +21,8 @@
   background:
     linear-gradient(
       180deg,
-      color-mix(in srgb, var(--surface) 94%, transparent) 0%,
-      color-mix(in srgb, var(--surface) 98%, black 2%) 100%
+      color-mix(in srgb, var(--surface-a) 94%, transparent) 0%,
+      color-mix(in srgb, var(--surface-a) 98%, black 2%) 100%
   );
   box-shadow: var(--shadow-card);
   padding: 14px 16px;
@@ -287,9 +287,15 @@
 }
 
 .compact-node-info-strip {
+  /* Single-row info strip. As the tile count climbs (up to 4 when 实时速率 / 累计流量 /
+     费用到期 / 连接数 are all on) each column gets narrower, so instead of wrapping we
+     shrink each tile's internals proportionally — values like "7.46 Kbps" / "¥19.90"
+     stay on one line rather than ellipsizing. --ci-shrink is 0 for 1–2 tiles (no
+     change) and rises by 1 per extra column (3 → 1, 4 → 2), feeding the calc() sizes. */
+  --ci-shrink: max(0, var(--compact-info-columns, 3) - 2);
   display: grid;
   grid-template-columns: repeat(var(--compact-info-columns, 3), minmax(0, 1fr));
-  gap: 7px;
+  gap: calc(7px - var(--ci-shrink) * 0.8px);
   border-top: 1px solid color-mix(in srgb, var(--hairline) 88%, transparent);
   padding-top: 8px;
 }
@@ -401,7 +407,7 @@
   border: 1px solid color-mix(in srgb, var(--border-subtle) 56%, transparent);
   border-radius: 9px;
   background: color-mix(in srgb, var(--fill-tertiary) 70%, transparent);
-  padding: 6px 8px;
+  padding: calc(6px - var(--ci-shrink) * 0.4px) calc(8px - var(--ci-shrink) * 1px);
   color: var(--text-secondary);
   text-align: left;
 }
@@ -410,7 +416,7 @@
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 3px;
+  gap: calc(3px - var(--ci-shrink) * 0.35px);
 }
 
 .compact-node-info-row {
@@ -418,23 +424,31 @@
   min-width: 0;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
-  font-size: 11px;
+  gap: calc(6px - var(--ci-shrink) * 0.7px);
+  font-size: calc(11px - var(--ci-shrink) * 0.4px);
   line-height: 1.1;
 }
 
 .compact-node-info-row-label {
   flex: 0 0 auto;
-  gap: 4px;
+  gap: calc(4px - var(--ci-shrink) * 0.5px);
   color: var(--compact-info-row-color, var(--compact-info-color));
+}
+
+/* Icons shrink with the tiles so the leading glyph never crowds out the value. */
+.compact-node-info-row-label svg {
+  flex: 0 0 auto;
+  width: calc(12px - var(--ci-shrink) * 0.6px);
+  height: calc(12px - var(--ci-shrink) * 0.6px);
 }
 
 .compact-node-info-row-value {
   min-width: 0;
   overflow: hidden;
   color: var(--compact-info-row-color, var(--text-primary));
-  font-size: 11.5px;
+  font-size: calc(11.5px - var(--ci-shrink) * 0.6px);
   font-weight: 760;
+  letter-spacing: calc(var(--ci-shrink) * -0.01em);
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -446,6 +460,13 @@
   color: var(--text-tertiary);
   font-size: 10px;
   font-weight: 620;
+}
+
+/* Strip-scoped unit shrink (overrides the shared rule above). Scoped to the strip
+   so --ci-shrink only ever applies here, never to .compact-node-health-value. */
+.compact-node-info-strip .compact-node-info-row-value small {
+  margin-left: calc(2px - var(--ci-shrink) * 0.3px);
+  font-size: calc(10px - var(--ci-shrink) * 0.5px);
 }
 
 .compact-node-traffic-pulse {

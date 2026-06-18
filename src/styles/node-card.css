@@ -2,7 +2,7 @@
 .server-card {
   position: relative;
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--surface) 94%, transparent) 0%, color-mix(in srgb, var(--surface) 98%, black 2%) 100%);
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-a) 94%, transparent) 0%, color-mix(in srgb, var(--surface-a) 98%, black 2%) 100%);
   border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
   border-radius: 18px;
   content-visibility: auto;

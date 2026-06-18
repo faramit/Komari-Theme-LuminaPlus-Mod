@@ -65,6 +65,32 @@
         document.documentElement.style.colorScheme = resolved;
         const meta = document.querySelector('meta[name="theme-color"]');
         if (meta) meta.content = resolved === "dark" ? "#000000" : "#F5F5F7";
+
+        // Apply the cached custom background + card transparency before first
+        // paint so a refresh doesn't flash the solid theme before React mounts.
+        // Mirror of applyBackgroundCache() in src/utils/background.ts.
+        try {
+          const rawBg = localStorage.getItem("komaritheme:bg");
+          if (rawBg) {
+            const bg = JSON.parse(rawBg);
+            if (bg && bg.v === 1) {
+              const dark = resolved === "dark";
+              const desktop = dark ? bg.darkDesktop : bg.lightDesktop;
+              const mobile = (dark ? bg.darkMobile : bg.lightMobile) || desktop;
+              const style = document.documentElement.style;
+              style.setProperty("--bg-image-desktop", desktop || "none");
+              style.setProperty("--bg-image-mobile", mobile || "none");
+              style.setProperty("--bg-size", bg.size || "cover");
+              style.setProperty("--bg-position", bg.position || "center");
+              style.setProperty("--surface-alpha", bg.alpha || "100");
+              if (bg.blur) {
+                style.setProperty("--surface-blur", bg.blur);
+                document.documentElement.dataset.bgGlass = "true";
+              }
+              if (bg.scrim) style.setProperty("--bg-scrim", bg.scrim);
+            }
+          }
+        } catch {}
       })();
     </script>
   </head>

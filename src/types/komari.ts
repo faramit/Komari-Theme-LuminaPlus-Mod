@@ -157,6 +157,10 @@ export interface ThemeSettings {
   showConnections?: boolean;
   costIgnoredNodes?: string[];
   costRateApiUrl?: string;
+  backgroundImage?: string;
+  backgroundImageMobile?: string;
+  backgroundAlignment?: string;
+  surfaceOpacity?: number;
 }
 
 export const PublicConfigSchema = z

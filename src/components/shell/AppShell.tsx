@@ -1,4 +1,5 @@
 import { Outlet } from "react-router-dom";
+import { BackgroundLayer } from "./BackgroundLayer";
 import { FloatingControls } from "./FloatingControls";
 import { useAppearance } from "@/hooks/useAppearance";
 import { useSiteMetadata } from "@/hooks/useSiteMetadata";
@@ -8,6 +9,7 @@ export function AppShell() {
   useSiteMetadata();
   return (
     <div className="relative flex min-h-screen flex-col">
+      <BackgroundLayer />
       <FloatingControls />
       {/* max-[720px]:pt-16 reserves room for the fixed top-right floating controls
           so an expanded control row can't overlap the first card's header (its OS

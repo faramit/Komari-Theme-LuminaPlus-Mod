@@ -1,5 +1,66 @@
 /* komaritheme shared surface styles. */
 
+/* Fixed full-viewport background image, painted on body::before so it exists at
+   first paint (the index.html inline script seeds the vars before React mounts,
+   avoiding an opaque→glass flash). Sits above the body's --bg-0 fallback and
+   below #root content. Device-specific image is chosen purely in CSS; the urls +
+   size/position arrive as inherited custom properties on <html>. With no
+   background configured the vars default to `none`, so this paints nothing. */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: -2;
+  /* Stable, scroll-independent size. Using 100vw/100vh (NOT inset:0 or dvh)
+     decouples the layer from the dynamic viewport: the mobile URL-bar collapsing
+     on scroll and the desktop scrollbar toggling no longer change the box, so
+     `background-size: cover` never recomputes mid-scroll — that recompute was the
+     shrink/grow jitter. No compositor-promotion here (translateZ/will-change):
+     a promoted backdrop breaks the cards' backdrop-filter glass on some engines. */
+  width: 100vw;
+  height: 100vh;
+  background-image: var(--bg-image-desktop, none);
+  background-size: var(--bg-size, cover);
+  background-position: var(--bg-position, center);
+  background-repeat: no-repeat;
+  pointer-events: none;
+}
+
+@media (max-width: 720px) {
+  body::before {
+    background-image: var(--bg-image-mobile, var(--bg-image-desktop, none));
+  }
+}
+
+/* Readability scrim over the image. Uses --bg-0 (set into --bg-scrim) so it
+   darkens in dark mode and lightens in light mode automatically; transparent
+   when glass is off. Same stable sizing as the image layer. */
+body::after {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: -2;
+  width: 100vw;
+  height: 100vh;
+  background: var(--bg-scrim, transparent);
+  pointer-events: none;
+}
+
+/* Frosted glass on the primary floating surfaces — emitted ONLY under
+   [data-bg-glass], which the background layer sets when card opacity drops below
+   the glass threshold. Keeping the (compositor-costly) backdrop-filter behind
+   this gate means the default solid theme never pays for it. */
+[data-bg-glass] .server-card,
+[data-bg-glass] .compact-node-card,
+[data-bg-glass] .instance-panel,
+[data-bg-glass] .overview-card,
+[data-bg-glass] .home-group-tabs {
+  backdrop-filter: blur(var(--surface-blur, 0px));
+  -webkit-backdrop-filter: blur(var(--surface-blur, 0px));
+}
+
 .surface-inset {
   background: var(--surface-sunken);
   border: 1px solid var(--hairline);
@@ -370,7 +431,7 @@
 
 .instance-panel {
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--surface) 99%, white 1%) 0%, var(--surface) 100%);
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-a) 99%, white 1%) 0%, var(--surface-a) 100%);
   border: 1px solid var(--border);
   border-radius: 20px;
   box-shadow: var(--shadow-card);

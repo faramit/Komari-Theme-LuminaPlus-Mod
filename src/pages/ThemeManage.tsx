@@ -16,6 +16,7 @@ import {
   Search,
   Sun,
   SunMoon,
+  Wallpaper,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { InstancePanel } from "@/components/instance/InstancePanel";
@@ -30,6 +31,13 @@ import {
   saveThemeSettings,
 } from "@/services/api";
 import type { AdminClient, PingTask, ThemeSettings } from "@/types/komari";
+import {
+  type BackgroundPosition,
+  type BackgroundSize,
+  normalizeBackgroundAlignment,
+  normalizeBackgroundUrl,
+  parseBackgroundAlignment,
+} from "@/utils/background";
 import {
   isCostRateApiUrlValid,
   normalizeCostIgnoredNodes,
@@ -67,6 +75,16 @@ const NODE_VIEW_MODE_OPTIONS = [
   { value: "large", label: "大卡片", icon: LayoutGrid },
   { value: "compact", label: "小卡片", icon: Rows3 },
 ] as const;
+const BACKGROUND_SIZE_OPTIONS: Array<{ value: BackgroundSize; label: string }> = [
+  { value: "cover", label: "填满" },
+  { value: "contain", label: "完整" },
+  { value: "auto", label: "原始" },
+];
+const BACKGROUND_POSITION_OPTIONS: Array<{ value: BackgroundPosition; label: string }> = [
+  { value: "top", label: "顶部" },
+  { value: "center", label: "居中" },
+  { value: "bottom", label: "底部" },
+];
 
 const OVERVIEW_RATING_LABEL_FIELDS: Array<{
   key: OverviewRatingKind;
@@ -208,6 +226,10 @@ function pickManagedThemeSettings(settings: ResolvedThemeSettings): ThemeSetting
     showConnections: settings.showConnections,
     costIgnoredNodes: settings.costIgnoredNodes,
     costRateApiUrl: settings.costRateApiUrl,
+    backgroundImage: settings.backgroundImage,
+    backgroundImageMobile: settings.backgroundImageMobile,
+    backgroundAlignment: settings.backgroundAlignment,
+    surfaceOpacity: settings.surfaceOpacity,
   };
 }
 
@@ -246,6 +268,14 @@ export function ThemeManage() {
   const [draftCostIgnoredText, setDraftCostIgnoredText] = useState("");
   const [draftCostRateApiUrl, setDraftCostRateApiUrl] = useState(
     DEFAULT_THEME_SETTINGS.costRateApiUrl,
+  );
+  const [draftBackgroundImage, setDraftBackgroundImage] = useState("");
+  const [draftBackgroundImageMobile, setDraftBackgroundImageMobile] = useState("");
+  const [draftBackgroundAlignment, setDraftBackgroundAlignment] = useState(
+    DEFAULT_THEME_SETTINGS.backgroundAlignment,
+  );
+  const [draftSurfaceOpacity, setDraftSurfaceOpacity] = useState(
+    DEFAULT_THEME_SETTINGS.surfaceOpacity,
   );
   const [expandedTaskId, setExpandedTaskId] = useState<number | null>(null);
   const [taskSearch, setTaskSearch] = useState("");
@@ -319,6 +349,10 @@ export function ThemeManage() {
     setDraftShowConnections(next.showConnections);
     setDraftCostIgnoredText(next.costIgnoredNodes.join("\n"));
     setDraftCostRateApiUrl(next.costRateApiUrl);
+    setDraftBackgroundImage(next.backgroundImage);
+    setDraftBackgroundImageMobile(next.backgroundImageMobile);
+    setDraftBackgroundAlignment(next.backgroundAlignment);
+    setDraftSurfaceOpacity(next.surfaceOpacity);
   }, []);
 
   useEffect(() => {
@@ -419,6 +453,10 @@ export function ThemeManage() {
       showConnections: draftShowConnections,
       costIgnoredNodes: draftCostIgnoredNodes,
       costRateApiUrl: normalizedDraftCostRateApiUrl,
+      backgroundImage: normalizeBackgroundUrl(draftBackgroundImage),
+      backgroundImageMobile: normalizeBackgroundUrl(draftBackgroundImageMobile),
+      backgroundAlignment: normalizeBackgroundAlignment(draftBackgroundAlignment),
+      surfaceOpacity: draftSurfaceOpacity,
     }),
     [
       draftAppearance,
@@ -445,6 +483,10 @@ export function ThemeManage() {
       draftShowConnections,
       draftCostIgnoredNodes,
       normalizedDraftCostRateApiUrl,
+      draftBackgroundImage,
+      draftBackgroundImageMobile,
+      draftBackgroundAlignment,
+      draftSurfaceOpacity,
     ],
   );
 
@@ -551,6 +593,15 @@ export function ThemeManage() {
     else if (kind === "bandwidth") setDraftBandwidthRatingLabels(value);
     else setDraftAssetRatingLabels(value);
   };
+  const draftBgAlignment = parseBackgroundAlignment(draftBackgroundAlignment);
+  const setBgSize = (size: BackgroundSize) =>
+    setDraftBackgroundAlignment(`${size},${draftBgAlignment.position}`);
+  const setBgPosition = (position: BackgroundPosition) =>
+    setDraftBackgroundAlignment(`${draftBgAlignment.size},${position}`);
+  const hasBackgroundImage = Boolean(
+    normalizeBackgroundUrl(draftBackgroundImage) ||
+      normalizeBackgroundUrl(draftBackgroundImageMobile),
+  );
 
   return (
     <div className="flex flex-col gap-5 py-2">
@@ -697,6 +748,112 @@ export function ThemeManage() {
                 </button>
               ))}
             </div>
+          </div>
+        </div>
+      </InstancePanel>
+
+      <InstancePanel
+        title="背景与透明度"
+        description="为站点设置自定义背景图，并调节卡片不透明度。背景图可分别为浅色 / 深色与桌面 / 移动端设置；卡片不透明度调低后会自动加上磨砂玻璃与可读性遮罩。"
+        aside={<Wallpaper size={16} />}
+      >
+        <div className="flex flex-col gap-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="flex min-w-0 flex-col gap-2">
+              <span className="text-[12px] font-medium text-[var(--text-secondary)]">
+                桌面端背景图
+              </span>
+              <input
+                value={draftBackgroundImage}
+                onChange={(event) => setDraftBackgroundImage(event.target.value)}
+                placeholder="https://example.com/bg.webp"
+                className="surface-inset w-full px-3 py-2 text-[13px] outline-none"
+              />
+              <span className="text-[11px] text-[var(--text-tertiary)]">
+                留空则不显示背景图。可用 <code>浅色图|深色图</code> 为两种外观分别设置。
+              </span>
+            </label>
+            <label className="flex min-w-0 flex-col gap-2">
+              <span className="text-[12px] font-medium text-[var(--text-secondary)]">
+                移动端背景图
+              </span>
+              <input
+                value={draftBackgroundImageMobile}
+                onChange={(event) => setDraftBackgroundImageMobile(event.target.value)}
+                placeholder="留空则沿用桌面端背景图"
+                className="surface-inset w-full px-3 py-2 text-[13px] outline-none"
+              />
+              <span className="text-[11px] text-[var(--text-tertiary)]">
+                屏宽 ≤ 720px 时生效；同样支持 <code>浅色图|深色图</code> 写法。
+              </span>
+            </label>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="surface-inset flex flex-col gap-3 px-4 py-4">
+              <div className="text-[13px] font-semibold text-[var(--text-primary)]">缩放方式</div>
+              <div className="instance-segmented is-scrollable">
+                {BACKGROUND_SIZE_OPTIONS.map(({ value, label }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    data-active={draftBgAlignment.size === value ? "true" : "false"}
+                    aria-pressed={draftBgAlignment.size === value}
+                    onClick={() => setBgSize(value)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="surface-inset flex flex-col gap-3 px-4 py-4">
+              <div className="text-[13px] font-semibold text-[var(--text-primary)]">对齐位置</div>
+              <div className="instance-segmented is-scrollable">
+                {BACKGROUND_POSITION_OPTIONS.map(({ value, label }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    data-active={draftBgAlignment.position === value ? "true" : "false"}
+                    aria-pressed={draftBgAlignment.position === value}
+                    onClick={() => setBgPosition(value)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="surface-inset flex flex-col gap-3 px-4 py-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span className="text-[13px] font-semibold text-[var(--text-primary)]">
+                卡片不透明度
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={1}
+                  inputMode="numeric"
+                  value={draftSurfaceOpacity}
+                  onChange={(event) => {
+                    const next = Number(event.target.value);
+                    if (!Number.isFinite(next)) return;
+                    setDraftSurfaceOpacity(Math.min(100, Math.max(0, Math.round(next))));
+                  }}
+                  aria-label="卡片不透明度百分比"
+                  className="surface-inset w-20 px-3 py-2 text-right text-[13px] tabular outline-none"
+                />
+                <span className="text-[13px] font-medium text-[var(--text-tertiary)]">%</span>
+              </span>
+            </div>
+            <span className="text-[11px] leading-relaxed text-[var(--text-tertiary)]">
+              输入 0–100 的整数。100 = 完全不透明（与默认主题一致），数值越低卡片越通透、越能透出背景图。
+              {hasBackgroundImage
+                ? " 低于 95 时会自动叠加磨砂玻璃与可读性遮罩，保证文字清晰。"
+                : " 需先在上方设置背景图后才会生效。"}
+            </span>
           </div>
         </div>
       </InstancePanel>

@@ -8,8 +8,8 @@ import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { useViewMode } from "@/hooks/useViewMode";
 import {
   formatBytes,
-  formatTrafficRate,
-  formatTrafficRateLabel,
+  formatByteRate,
+  formatByteRateLabel,
 } from "@/utils/format";
 import { calculateCostSummary, formatCnyMoney, getExchangeRates } from "@/utils/cost";
 import {
@@ -43,22 +43,9 @@ interface HomeOverview {
   netDown: number;
 }
 
-const SHORT_RATE_UNITS: Record<ReturnType<typeof formatTrafficRate>["unit"], string> = {
-  bps: "b",
-  Kbps: "K",
-  Mbps: "M",
-  Gbps: "G",
-  Tbps: "T",
-};
-
 function formatCompactBytes(value: number): string {
   const [amount, unit = "B"] = formatBytes(value).split(" ");
   return `${amount}${unit[0]}`;
-}
-
-function formatCompactTrafficRateLabel(value: number): string {
-  const rate = formatTrafficRate(value);
-  return `${rate.value}${SHORT_RATE_UNITS[rate.unit]}`;
 }
 
 function HomeOverviewCards({
@@ -93,7 +80,7 @@ function HomeOverviewCards({
   const [trafficValue, trafficUnit] = formatBytes(
     overview.trafficUp + overview.trafficDown,
   ).split(" ");
-  const rate = formatTrafficRate(overview.netUp + overview.netDown);
+  const rate = formatByteRate(overview.netUp + overview.netDown);
   const onlinePct =
     overview.totalNodes > 0 ? (overview.onlineNodes / overview.totalNodes) * 100 : 0;
   const offlinePct =
@@ -105,8 +92,8 @@ function HomeOverviewCards({
       : "—";
   const trafficDetailLabel = `↑ ${formatBytes(overview.trafficUp)} · ↓ ${formatBytes(overview.trafficDown)}`;
   const trafficCompactLabel = `↑${formatCompactBytes(overview.trafficUp)} ↓${formatCompactBytes(overview.trafficDown)}`;
-  const bandwidthDetailLabel = `↑ ${formatTrafficRateLabel(overview.netUp)} · ↓ ${formatTrafficRateLabel(overview.netDown)}`;
-  const bandwidthCompactLabel = `↑${formatCompactTrafficRateLabel(overview.netUp)} ↓${formatCompactTrafficRateLabel(overview.netDown)}`;
+  const bandwidthDetailLabel = `↑ ${formatByteRateLabel(overview.netUp)} · ↓ ${formatByteRateLabel(overview.netDown)}`;
+  const bandwidthCompactLabel = `↑${formatCompactBytes(overview.netUp)} ↓${formatCompactBytes(overview.netDown)}`;
   const trafficRating =
     showOverviewRatings && showTrafficRating
       ? getOverviewRating({

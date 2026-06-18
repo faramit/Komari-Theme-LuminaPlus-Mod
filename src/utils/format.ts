@@ -82,6 +82,24 @@ export function formatTrafficRateLabel(bytesPerSec: number | undefined | null): 
   return `${rate.value} ${rate.unit}`;
 }
 
+export interface ByteRateDisplay {
+  value: string;
+  unit: string;
+}
+
+// Byte-based rate (KB/s · MB/s · GB/s · TB/s) — same 1024 ladder as formatBytes,
+// just suffixed with "/s". Used where a transfer speed reads more naturally in
+// bytes than in bits (e.g. the home 实时带宽 overview) instead of bps/Kbps/Mbps.
+export function formatByteRate(bytesPerSec: number | undefined | null): ByteRateDisplay {
+  const [value, unit = "B"] = formatBytes(bytesPerSec).split(" ");
+  return { value, unit: `${unit}/s` };
+}
+
+export function formatByteRateLabel(bytesPerSec: number | undefined | null): string {
+  const { value, unit } = formatByteRate(bytesPerSec);
+  return `${value} ${unit}`;
+}
+
 export function formatUptimeDays(seconds: number): { value: string; unit: string } {
   if (!seconds || seconds <= 0) return { value: "—", unit: "" };
   const days = seconds / 86400;

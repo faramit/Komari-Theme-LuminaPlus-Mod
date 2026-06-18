@@ -1,4 +1,11 @@
 import type { ThemeSettings } from "@/types/komari";
+import {
+  DEFAULT_BACKGROUND_ALIGNMENT,
+  DEFAULT_SURFACE_OPACITY,
+  normalizeBackgroundAlignment,
+  normalizeBackgroundUrl,
+  normalizeSurfaceOpacity,
+} from "@/utils/background";
 import { DEFAULT_COST_RATE_API_URL, normalizeCostIgnoredNodes, normalizeCostRateApiUrl } from "@/utils/cost";
 import { normalizeHomeGroupOrder } from "@/utils/homeNodes";
 import {
@@ -37,6 +44,10 @@ export interface ResolvedThemeSettings {
   showConnections: boolean;
   costIgnoredNodes: string[];
   costRateApiUrl: string;
+  backgroundImage: string;
+  backgroundImageMobile: string;
+  backgroundAlignment: string;
+  surfaceOpacity: number;
 }
 
 export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
@@ -66,6 +77,10 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   showConnections: false,
   costIgnoredNodes: [],
   costRateApiUrl: DEFAULT_COST_RATE_API_URL,
+  backgroundImage: "",
+  backgroundImageMobile: "",
+  backgroundAlignment: DEFAULT_BACKGROUND_ALIGNMENT,
+  surfaceOpacity: DEFAULT_SURFACE_OPACITY,
 };
 
 export function isAppearance(value: unknown): value is Appearance {
@@ -138,5 +153,9 @@ export function normalizeThemeSettings(
     showConnections: settings?.showConnections === true,
     costIgnoredNodes: normalizeCostIgnoredNodes(settings?.costIgnoredNodes),
     costRateApiUrl: normalizeCostRateApiUrl(settings?.costRateApiUrl),
+    backgroundImage: normalizeBackgroundUrl(settings?.backgroundImage),
+    backgroundImageMobile: normalizeBackgroundUrl(settings?.backgroundImageMobile),
+    backgroundAlignment: normalizeBackgroundAlignment(settings?.backgroundAlignment),
+    surfaceOpacity: normalizeSurfaceOpacity(settings?.surfaceOpacity),
   };
 }
