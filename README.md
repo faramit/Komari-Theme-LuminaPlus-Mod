@@ -2,6 +2,16 @@
 
 基于 [komari-theme-Lumina](https://github.com/stqfdyr/komari-theme-Lumina) 二开。感谢原作者 [stqfdyr](https://github.com/stqfdyr) 开源 Lumina 主题。
 
+## Star History
+
+<a href="https://www.star-history.com/#shanyang242/Theme&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=shanyang242/Theme&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=shanyang242/Theme&type=Date" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=shanyang242/Theme&type=Date" />
+  </picture>
+</a>
+
 ## 效果预览
 
 <p align="center">
