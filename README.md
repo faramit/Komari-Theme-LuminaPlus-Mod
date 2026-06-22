@@ -4,24 +4,48 @@
 
 ## 效果预览
 
+<p align="center">
+  <img src="docs/images/v1.1.8/theme-preview.png" alt="komaritheme 综合预览" width="90%">
+</p>
+
 ### 首页总览与节点卡片
 
-首页总览新增文字评级，节点卡片同步优化流量额度、在线时长与布局密度。
+首页总览新增文字评级，节点卡片同步优化流量额度、在线时长与布局密度；支持背景图与卡片透明度调节。
 
 <p align="center">
-  <img src="docs/images/v1.1.7/overview-large-card.png" alt="首页总览与大卡片" width="70%">
+  <img src="docs/images/v1.1.8/overview-large-card-solid.png" alt="首页总览与大卡片" width="70%">
 </p>
 
 <p align="center">
-  <img src="docs/images/v1.1.7/overview-large-card-dark.png" alt="首页总览与大卡片夜间模式" width="70%">
+  <img src="docs/images/v1.1.8/overview-large-card-solid-dark.png" alt="首页总览与大卡片夜间模式" width="70%">
 </p>
 
 <p align="center">
-  <img src="docs/images/v1.1.7/overview-compact-card.png" alt="首页总览与小卡片" width="70%">
+  <img src="docs/images/v1.1.8/overview-compact-card-solid.png" alt="首页总览与小卡片" width="70%">
 </p>
 
 <p align="center">
-  <img src="docs/images/v1.1.7/overview-compact-card-dark.png" alt="首页总览与小卡片夜间模式" width="70%">
+  <img src="docs/images/v1.1.8/overview-compact-card-solid-dark.png" alt="首页总览与小卡片夜间模式" width="70%">
+</p>
+
+### 透明背景
+
+背景图与卡片透明度可在主题管理中配置，支持大卡片、小卡片和移动端布局。
+
+<p align="center">
+  <img src="docs/images/v1.1.8/overview-large-card-glass.png" alt="透明背景首页总览与大卡片" width="70%">
+</p>
+
+<p align="center">
+  <img src="docs/images/v1.1.8/overview-large-card-glass-dark.png" alt="透明背景首页总览与大卡片夜间模式" width="70%">
+</p>
+
+<p align="center">
+  <img src="docs/images/v1.1.8/overview-compact-card-glass.png" alt="透明背景首页总览与小卡片" width="70%">
+</p>
+
+<p align="center">
+  <img src="docs/images/v1.1.8/overview-compact-card-glass-dark.png" alt="透明背景首页总览与小卡片夜间模式" width="70%">
 </p>
 
 ### 移动端
@@ -29,11 +53,19 @@
 移动端总览卡片采用更紧凑的信息展示，保留评级和关键指标。
 
 <p align="center">
-  <img src="docs/images/v1.1.7/mobile-overview.png" alt="移动端总览与小卡片" width="70%">
+  <img src="docs/images/v1.1.8/mobile-overview-solid.png" alt="移动端总览与小卡片" width="70%">
 </p>
 
 <p align="center">
-  <img src="docs/images/v1.1.7/mobile-overview-dark.png" alt="移动端总览与小卡片夜间模式" width="70%">
+  <img src="docs/images/v1.1.8/mobile-overview-solid-dark.png" alt="移动端总览与小卡片夜间模式" width="70%">
+</p>
+
+<p align="center">
+  <img src="docs/images/v1.1.8/mobile-overview-glass.png" alt="移动端透明背景总览与小卡片" width="70%">
+</p>
+
+<p align="center">
+  <img src="docs/images/v1.1.8/mobile-overview-glass-dark.png" alt="移动端透明背景总览与小卡片夜间模式" width="70%">
 </p>
 
 ### 资产统计
