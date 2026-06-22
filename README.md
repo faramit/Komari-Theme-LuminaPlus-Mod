@@ -5,7 +5,7 @@
 ## 效果预览
 
 <p align="center">
-  <img src="docs/images/v1.1.8/theme-preview.png" alt="komaritheme 综合预览" width="90%">
+  <img src="docs/images/theme-preview.png" alt="komaritheme 综合预览" width="90%">
 </p>
 
 ### 首页总览与节点卡片
