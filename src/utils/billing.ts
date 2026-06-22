@@ -15,8 +15,25 @@ function formatPriceNumber(value: number) {
 
 function isLongTermExpire(value: string | number | null | undefined) {
   if (value == null) return false;
-  const days = getExpireDaysRemaining(String(value));
+  const days = getExpireDaysRemaining(value);
   return days != null && days > LONG_TERM_EXPIRE_DAYS;
+}
+
+export type BillingCycleKind = "month" | "quarter" | "halfYear" | "year" | "lifetime";
+
+/**
+ * Classify a free-text billing-cycle keyword (must be pre-lowercased/trimmed)
+ * into a canonical cycle, or null when it isn't a recognized word. Shared by the
+ * label formatter here and the day-count resolver in utils/cost.ts so the regex
+ * set lives in exactly one place.
+ */
+export function classifyBillingCycleWord(normalized: string): BillingCycleKind | null {
+  if (/^(monthly|month|mo|月|每月)$/.test(normalized)) return "month";
+  if (/^(quarterly|quarter|季|季度|每季)$/.test(normalized)) return "quarter";
+  if (/^(semiannual|semi-annually|halfyear|half-year|半年)$/.test(normalized)) return "halfYear";
+  if (/^(annual|annually|yearly|year|yr|年|每年)$/.test(normalized)) return "year";
+  if (/^(lifetime|once|one-time|永久|一次性)$/.test(normalized)) return "lifetime";
+  return null;
 }
 
 export function formatBillingCycle(value: string | number | null | undefined) {
@@ -35,13 +52,19 @@ export function formatBillingCycle(value: string | number | null | undefined) {
     // numeric <= 0 (e.g. 0) falls through to the label fallback below.
   }
 
-  const normalized = raw.toLowerCase();
-  if (/^(monthly|month|mo|月|每月)$/.test(normalized)) return "月";
-  if (/^(quarterly|quarter|季|季度|每季)$/.test(normalized)) return "季";
-  if (/^(semiannual|semi-annually|halfyear|half-year|半年)$/.test(normalized)) return "半年";
-  if (/^(annual|annually|yearly|year|yr|年|每年)$/.test(normalized)) return "年";
-  if (/^(lifetime|once|one-time|永久|一次性)$/.test(normalized)) return "永久";
-  return "年";
+  switch (classifyBillingCycleWord(raw.toLowerCase())) {
+    case "month":
+      return "月";
+    case "quarter":
+      return "季";
+    case "halfYear":
+      return "半年";
+    case "lifetime":
+      return "永久";
+    case "year":
+    default:
+      return "年";
+  }
 }
 
 export function formatRenewalPrice({

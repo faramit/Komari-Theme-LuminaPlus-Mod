@@ -46,8 +46,9 @@ export function formatBytes(n: number | undefined | null, decimals = 2): string 
 function formatRateValue(value: number): string {
   if (value >= 100) return Math.round(value).toString();
   if (value >= 10) return trimFixed(value, 1);
-  if (value >= 1) return trimFixed(value, 2);
-  return trimFixed(value, 3);
+  // Only ever called with bitsPerSec / divisor where bitsPerSec >= divisor, so
+  // value is always >= 1 — no sub-1 branch is reachable.
+  return trimFixed(value, 2);
 }
 
 export function formatTrafficRate(bytesPerSec: number | undefined | null): TrafficRateDisplay {
@@ -89,7 +90,7 @@ export interface ByteRateDisplay {
 
 // Byte-based rate (KB/s · MB/s · GB/s · TB/s) — same 1024 ladder as formatBytes,
 // just suffixed with "/s". Used where a transfer speed reads more naturally in
-// bytes than in bits (e.g. the home 实时带宽 overview) instead of bps/Kbps/Mbps.
+// bytes than in bits (e.g. home 实时带宽 and node-card speeds) instead of bps/Kbps/Mbps.
 export function formatByteRate(bytesPerSec: number | undefined | null): ByteRateDisplay {
   const [value, unit = "B"] = formatBytes(bytesPerSec).split(" ");
   return { value, unit: `${unit}/s` };
@@ -160,7 +161,9 @@ export function resolveExpireTimestamp(
   return ts;
 }
 
-export function getExpireDaysRemaining(iso: string | null | undefined): number | null {
+export function getExpireDaysRemaining(
+  iso: string | number | null | undefined,
+): number | null {
   const ts = resolveExpireTimestamp(iso);
   if (ts == null) return null;
   return Math.floor((ts - Date.now()) / 86400000);

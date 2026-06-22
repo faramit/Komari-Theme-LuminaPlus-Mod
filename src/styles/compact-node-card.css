@@ -51,13 +51,13 @@
   background:
     linear-gradient(
       180deg,
-      color-mix(in srgb, var(--status-offline) 12%, var(--surface) 88%) 0%,
-      color-mix(in srgb, var(--status-offline) 7%, var(--surface) 93%) 100%
+      color-mix(in srgb, var(--status-offline) 24%, var(--surface-a) 76%) 0%,
+      color-mix(in srgb, var(--status-offline) 16%, var(--surface-a) 84%) 100%
     );
-  border-color: color-mix(in srgb, var(--status-offline) 42%, var(--border));
+  border-color: color-mix(in srgb, var(--status-offline) 58%, var(--border));
   box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--status-offline) 18%, transparent),
-    0 14px 32px -24px color-mix(in srgb, var(--status-offline) 18%, rgba(0, 0, 0, 0.82));
+    0 0 0 1px color-mix(in srgb, var(--status-offline) 28%, transparent),
+    0 14px 32px -24px color-mix(in srgb, var(--status-offline) 34%, rgba(0, 0, 0, 0.82));
 }
 
 .compact-node-header {
@@ -138,7 +138,7 @@
   place-items: center;
   border: 1px solid var(--border-subtle);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--surface-elev) 58%, transparent);
+  background: color-mix(in srgb, var(--surface-elev-a) 58%, transparent);
   color: var(--text-tertiary);
   transition:
     background 160ms ease,
@@ -147,7 +147,7 @@
 }
 
 .compact-node-detail-link:hover {
-  background: color-mix(in srgb, var(--surface-elev) 78%, transparent);
+  background: color-mix(in srgb, var(--surface-elev-a) 78%, transparent);
   color: var(--progress-cpu);
   transform: translateY(-1px);
 }

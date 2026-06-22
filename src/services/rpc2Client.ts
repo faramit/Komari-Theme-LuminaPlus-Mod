@@ -154,6 +154,7 @@ class RPC2Client {
         window.clearTimeout(timeout);
         ws.removeEventListener("open", handleOpen);
         ws.removeEventListener("error", handleError);
+        ws.removeEventListener("close", handleConnectClose);
       };
 
       const handleOpen = () => {
@@ -170,8 +171,21 @@ class RPC2Client {
         reject(new Error("RPC2 WebSocket connection failed"));
       };
 
+      // A clean close during the handshake (proxy/LB accepts then drops, WS-layer
+      // auth rejection) fires "close" but no "error", so without this the connect
+      // promise stays pending until the 10s timeout — and scheduleReconnect's next
+      // connect() would just return that stuck promise, stalling recovery. Reject
+      // here so the promise settles immediately; the persistent onclose handler
+      // (attached below) still runs scheduleReconnect.
+      const handleConnectClose = () => {
+        cleanup();
+        this.state = "error";
+        reject(new Error("RPC2 WebSocket closed during connect"));
+      };
+
       ws.addEventListener("open", handleOpen, { once: true });
       ws.addEventListener("error", handleError, { once: true });
+      ws.addEventListener("close", handleConnectClose, { once: true });
       this.attachSocketHandlers(ws);
     }).finally(() => {
       this.connectPromise = null;
@@ -198,9 +212,9 @@ class RPC2Client {
       this.scheduleReconnect();
     };
 
-    ws.onerror = () => {
-      this.state = "error";
-    };
+    // No onerror handler: a transport error is always followed by a close event,
+    // and onclose already drives state + reconnect. (During the handshake the
+    // connect promise's own one-shot error listener handles rejection.)
   }
 
   private handleMessage(payload: JsonRpcResponse) {

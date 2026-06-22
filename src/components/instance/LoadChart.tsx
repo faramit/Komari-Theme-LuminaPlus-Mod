@@ -6,11 +6,11 @@ import { useLoadRecords } from "@/hooks/useRecords";
 import { useNodeMetrics } from "@/hooks/useNode";
 import { InstancePanel } from "./InstancePanel";
 import {
+  buildChartTooltipHooks,
   CHART_PALETTE,
   createTimeAxisFormatter,
   formatChartCoverageTime,
-  formatTooltipTime,
-  getChartTooltipPosition,
+  getAxisColors,
   toChartSeconds,
   useResponsiveChartSize,
   type ChartTooltipState,
@@ -180,8 +180,7 @@ function buildBaseOptions({
   axisSize?: number;
 }): Omit<uPlot.Options, "width" | "height"> {
   const isDark = resolvedAppearance === "dark";
-  const grid = isDark ? "rgba(255,255,255,0.065)" : "rgba(0,0,0,0.08)";
-  const text = isDark ? "#a5a5aa" : "#52525b";
+  const { grid, text } = getAxisColors(isDark);
 
   return {
     padding: [8, 12, 10, 2],
@@ -298,61 +297,32 @@ const ChartCard = memo(function ChartCard({
 
   // Size-independent enhanced options (base + interaction hooks). Stable across
   // resizes so only width/height change on the final object below.
-  const enhancedOptions = useMemo<Omit<uPlot.Options, "width" | "height">>(() => ({
-    ...baseOptions,
-    hooks: {
-      ...baseOptions.hooks,
-      init: [
-        ...(baseOptions.hooks?.init ?? []),
-        (u) => {
-          u.root.addEventListener("mouseleave", () => {
-            setTooltip((prev) => ({ ...prev, show: false }));
-          });
-        },
-      ],
-      setCursor: [
-        (u) => {
-          const idx = u.cursor.idx;
-          if (idx == null || idx < 0) {
-            setTooltip((prev) => ({ ...prev, show: false }));
-            return;
-          }
-          const currentData = dataRef.current;
-          const timestamp = currentData[0]?.[idx];
-          if (typeof timestamp !== "number") {
-            setTooltip((prev) => ({ ...prev, show: false }));
-            return;
-          }
-          const rows = keys.map((key, keyIndex) => {
-            const value = currentData[keyIndex + 1]?.[idx] as number | null | undefined;
-            return {
-              label: getSeriesLabel(key),
-              value: formatTooltipValue(key, value, unit),
-              color: colors[keyIndex] ?? colors[0],
-            };
-          });
-          const bbox = u.root.getBoundingClientRect();
-          const anchorX = u.valToPos(timestamp, "x");
-          const anchorY = typeof u.cursor.top === "number" ? u.cursor.top : bbox.height * 0.5;
-          const position = getChartTooltipPosition({
-            containerWidth: bbox.width,
-            containerHeight: bbox.height,
-            anchorX,
-            anchorY,
-            rowCount: rows.length,
-            estimatedWidth: 176,
-          });
-          setTooltip({
-            show: true,
-            left: position.left,
-            top: position.top,
-            rows,
-            time: formatTooltipTime(timestamp, rangeHours),
-          });
-        },
-      ],
-    },
-  }), [colors, keys, baseOptions, rangeHours, unit]);
+  const enhancedOptions = useMemo<Omit<uPlot.Options, "width" | "height">>(() => {
+    const tooltip = buildChartTooltipHooks({
+      dataRef,
+      rangeHours,
+      estimatedWidth: 176,
+      setTooltip,
+      buildRows: (idx) =>
+        keys.map((key, keyIndex) => ({
+          label: getSeriesLabel(key),
+          value: formatTooltipValue(
+            key,
+            dataRef.current[keyIndex + 1]?.[idx] as number | null | undefined,
+            unit,
+          ),
+          color: colors[keyIndex] ?? colors[0],
+        })),
+    });
+    return {
+      ...baseOptions,
+      hooks: {
+        ...baseOptions.hooks,
+        init: [...(baseOptions.hooks?.init ?? []), tooltip.onInit],
+        setCursor: [tooltip.onSetCursor],
+      },
+    };
+  }, [colors, keys, baseOptions, rangeHours, unit]);
 
   // Only this memo changes on resize, so uplot-react performs a setSize() rather
   // than a full teardown/rebuild of the chart.
@@ -377,7 +347,7 @@ const ChartCard = memo(function ChartCard({
         </div>
       </header>
       <div className="instance-uplot-wrap">
-        <UplotReact options={chartOptions} data={data} />
+        <UplotReact options={chartOptions} data={data} resetScales={false} />
         {tooltip.show && (
           <div
             className="instance-chart-tooltip"

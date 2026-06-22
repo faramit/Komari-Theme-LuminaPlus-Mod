@@ -15,7 +15,7 @@ describe("fillMissingMetricPoints", () => {
       { time: 20, v: 3 },
       { time: 35, v: 9 },
     ];
-    const filled = fillMissingMetricPoints(points, { intervalMs: 10, matchToleranceMs: 5 });
+    const filled = fillMissingMetricPoints(points, { intervalSeconds: 10, matchToleranceSeconds: 5 });
     const last = filled[filled.length - 1];
     expect(last.time).toBe(35);
     expect(last.v).toBe(9);
@@ -27,7 +27,7 @@ describe("fillMissingMetricPoints", () => {
       { time: 10, v: 2 },
       { time: 20, v: 3 },
     ];
-    const filled = fillMissingMetricPoints(points, { intervalMs: 10, matchToleranceMs: 5 });
+    const filled = fillMissingMetricPoints(points, { intervalSeconds: 10, matchToleranceSeconds: 5 });
     expect(filled.map((p) => p.time)).toEqual([0, 10, 20]);
     expect(filled[filled.length - 1].v).toBe(3);
   });

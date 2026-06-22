@@ -5,17 +5,17 @@ import { Eye, EyeOff, RefreshCw } from "lucide-react";
 import { usePingRecords } from "@/hooks/useRecords";
 import { InstancePanel } from "./InstancePanel";
 import {
+  buildChartTooltipHooks,
   colorForSeries,
   createTimeAxisFormatter,
-  formatTooltipTime,
-  getChartTooltipPosition,
+  getAxisColors,
   toChartSeconds,
   useResponsiveChartSize,
   type ChartTooltipState,
 } from "./chartShared";
 import {
   cutPeakValues,
-  detectTypicalIntervalMs,
+  detectTypicalIntervalSeconds,
   insertMetricGapSentinels,
 } from "./chartData";
 import { latencyHeatColor, lossHeatColor } from "@/utils/metricTone";
@@ -124,7 +124,7 @@ export function PingChart({
       .filter((value): value is number => typeof value === "number" && value > 0);
     const fallbackInterval = taskIntervals.length > 0
       ? Math.min(...taskIntervals)
-      : detectTypicalIntervalMs(sortedRecords.map(({ time }) => time), 60);
+      : detectTypicalIntervalSeconds(sortedRecords.map(({ time }) => time), 60);
     const tolerance = Math.min(6, Math.max(0.8, fallbackInterval * 0.25));
 
     // Records are time-sorted and anchors are always more than `tolerance` apart
@@ -203,8 +203,23 @@ export function PingChart({
   // and on-click.)
   const baseOptions = useMemo<Omit<uPlot.Options, "width" | "height"> | null>(() => {
     if (!chart) return null;
-    const grid = isDark ? "rgba(255,255,255,0.065)" : "rgba(0,0,0,0.08)";
-    const text = isDark ? "#a5a5aa" : "#52525b";
+    const { grid, text } = getAxisColors(isDark);
+    const tooltipHooks = buildChartTooltipHooks({
+      dataRef: chartRef,
+      rangeHours: hours,
+      estimatedWidth: 196,
+      setTooltip,
+      buildRows: (idx) =>
+        visibleTasks.map((task) => {
+          const taskIndex = taskIndexById.get(task.id) ?? 0;
+          const value = chartRef.current[taskIndex + 1]?.[idx] as number | null | undefined;
+          return {
+            label: taskLabels.get(task.id) ?? `任务 #${task.id}`,
+            value: value == null ? "—" : `${value.toFixed(1)} ms`,
+            color: taskColors.get(task.id) ?? colorForSeries(taskIndex),
+          };
+        }),
+    });
     return {
       padding: [10, 14, 12, 2],
       cursor: { drag: { x: true, y: false } },
@@ -241,55 +256,8 @@ export function PingChart({
         })),
       ],
       hooks: {
-        init: [
-          (u) => {
-            u.root.addEventListener("mouseleave", () => {
-              setTooltip((prev) => ({ ...prev, show: false }));
-            });
-          },
-        ],
-        setCursor: [
-          (u) => {
-            const idx = u.cursor.idx;
-            if (idx == null || idx < 0 || !chart) {
-              setTooltip((prev) => ({ ...prev, show: false }));
-              return;
-            }
-            const currentChart = chartRef.current;
-            const timestamp = currentChart[0]?.[idx];
-            if (typeof timestamp !== "number") {
-              setTooltip((prev) => ({ ...prev, show: false }));
-              return;
-            }
-            const bbox = u.root.getBoundingClientRect();
-            const anchorX = u.valToPos(timestamp, "x");
-            const rows = visibleTasks.map((task) => {
-              const taskIndex = taskIndexById.get(task.id) ?? 0;
-              const value = currentChart[taskIndex + 1]?.[idx] as number | null | undefined;
-              return {
-                label: taskLabels.get(task.id) ?? `任务 #${task.id}`,
-                value: value == null ? "—" : `${value.toFixed(1)} ms`,
-                color: taskColors.get(task.id) ?? colorForSeries(taskIndex),
-              };
-            });
-            const anchorY = typeof u.cursor.top === "number" ? u.cursor.top : bbox.height * 0.5;
-            const position = getChartTooltipPosition({
-              containerWidth: bbox.width,
-              containerHeight: bbox.height,
-              anchorX,
-              anchorY,
-              rowCount: rows.length,
-              estimatedWidth: 196,
-            });
-            setTooltip({
-              show: true,
-              left: position.left,
-              top: position.top,
-              rows,
-              time: formatTooltipTime(timestamp, hours),
-            });
-          },
-        ],
+        init: [tooltipHooks.onInit],
+        setCursor: [tooltipHooks.onSetCursor],
       },
     };
   }, [chart, connectNulls, hiddenTasks, hours, isDark, taskColors, taskIndexById, taskLabels, tasks, visibleTasks, yRange]);
@@ -325,7 +293,9 @@ export function PingChart({
       const max = positives.length ? positives[positives.length - 1] : null;
       const p50 = percentileFromSorted(positives, 0.5);
       const p99 = percentileFromSorted(positives, 0.99);
-      const volatility = p50 && p50 > 0 && p99 ? p99 / p50 : null;
+      // positives are all > 0, so a non-null p50 is always > 0 — the old `p50 > 0`
+      // sub-check was redundant.
+      const volatility = p50 && p99 ? p99 / p50 : null;
       const total = records.length;
       const lost = records.filter((record) => record.value <= 0).length;
       const loss = total > 0 ? (lost / total) * 100 : task.loss;
@@ -458,7 +428,7 @@ export function PingChart({
       <div ref={chartSizeRef} className="instance-uplot-wrap is-large">
         {chart && options && visibleTasks.length > 0 ? (
           <>
-            <UplotReact options={options} data={chart} />
+            <UplotReact options={options} data={chart} resetScales={false} />
             {tooltip.show && (
               <div
                 className="instance-chart-tooltip"

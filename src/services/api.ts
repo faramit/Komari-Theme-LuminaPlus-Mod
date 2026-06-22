@@ -119,8 +119,13 @@ async function apiGet<T>(
   if (envelopeResult.success) return envelopeResult.data.data as T;
   const rawResult = schema.safeParse(json);
   if (rawResult.success) return rawResult.data;
+  // Surface both parse errors: for enveloped endpoints the envelope error is the
+  // useful one, for bare array/object endpoints the raw error is — and from here
+  // we can't tell which shape the endpoint was meant to return.
   throw new Error(
-    `Schema mismatch on ${path}: ${envelopeResult.error.issues[0]?.message ?? ""}`,
+    `Schema mismatch on ${path}: envelope=${
+      envelopeResult.error.issues[0]?.message ?? ""
+    }; raw=${rawResult.error.issues[0]?.message ?? ""}`,
   );
 }
 
@@ -223,6 +228,8 @@ function normalizeRpcPingOverview(
 }
 
 export async function getMe(): Promise<Me> {
+  // Cast required: zod `.passthrough()` schemas infer through apiGet as their
+  // input type (defaulted fields optional), so the result must be re-narrowed.
   return (await apiGet("/api/me", MeSchema)) as Me;
 }
 
@@ -270,7 +277,7 @@ export async function getLoadRecords(
     return normalizeRpcLoadRecords(uuid, payload);
   } catch {
     return (await apiGet(
-      `/api/records/load?uuid=${encodeURIComponent(uuid)}&hours=${hours}`,
+      `/api/records/load?${new URLSearchParams({ uuid, hours: String(hours) })}`,
       z.object({
         count: z.number().default(0),
         records: z.array(LoadRecordSchema).default([]),
@@ -298,7 +305,7 @@ export async function getPingRecords(
     return normalizeRpcPingRecords(uuid, payload);
   } catch {
     return (await apiGet(
-      `/api/records/ping?uuid=${encodeURIComponent(uuid)}&hours=${hours}`,
+      `/api/records/ping?${new URLSearchParams({ uuid, hours: String(hours) })}`,
       z.object({
         count: z.number().default(0),
         records: z.array(PingRecordSchema).default([]),
@@ -355,7 +362,7 @@ export async function getPingOverview(
       {
         hours,
         type: "ping",
-        ...(taskId ? { task_id: taskId } : {}),
+        ...(taskId != null ? { task_id: taskId } : {}),
         maxCount: OVERVIEW_PING_MAX_COUNT,
       },
       RpcRecordsSchema,
@@ -363,7 +370,7 @@ export async function getPingOverview(
     );
     return normalizeRpcPingOverview(payload);
   } catch {
-    if (!taskId) {
+    if (taskId == null) {
       throw new Error("Ping overview fallback requires a concrete task_id");
     }
     if (options?.signal?.aborted) {
@@ -371,7 +378,7 @@ export async function getPingOverview(
     }
 
     const data = await apiGet(
-      `/api/records/ping?task_id=${encodeURIComponent(taskId)}&hours=${hours}`,
+      `/api/records/ping?${new URLSearchParams({ task_id: String(taskId), hours: String(hours) })}`,
       z.object({
         count: z.number().default(0),
         records: z.array(PingRecordSchema).default([]),

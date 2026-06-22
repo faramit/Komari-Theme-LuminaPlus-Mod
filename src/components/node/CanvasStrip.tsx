@@ -17,10 +17,54 @@ interface CanvasStripProps {
 // and reflow-free) and cleared whenever the theme flips.
 const cssColorCache = new Map<string, string>();
 let cssColorCacheKey: string | null = null;
+let colorValidationContext: CanvasRenderingContext2D | null | undefined;
+
+const CANVAS_COLOR_FALLBACKS = {
+  light: {
+    "--progress-bg": "#e4e4e7",
+    "--progress-cpu": "#3b82f6",
+    "--progress-memory": "#8b5cf6",
+    "--progress-disk": "#e97b35",
+    "--progress-network": "#10b981",
+    "--status-success": "#2f9e65",
+    "--status-warning": "#e9a23b",
+    "--status-error": "#dc2626",
+    "--status-info": "#3b82f6",
+    "--status-online": "#2f9e65",
+    "--status-offline": "#dc2626",
+    "--text-tertiary": "#71717a",
+  },
+  dark: {
+    "--progress-bg": "#26262a",
+    "--progress-cpu": "#5d88ff",
+    "--progress-memory": "#a35cf5",
+    "--progress-disk": "#f1873d",
+    "--progress-network": "#5bbb8a",
+    "--status-success": "#61c08f",
+    "--status-warning": "#d4a54a",
+    "--status-error": "#d84e45",
+    "--status-info": "#5d88ff",
+    "--status-online": "#61c08f",
+    "--status-offline": "#d84e45",
+    "--text-tertiary": "#76767c",
+  },
+} as const;
+
+function extractCssVarName(color: string): string | null {
+  return color.match(/^var\((--[^),\s]+)/)?.[1] ?? null;
+}
+
+function fallbackCanvasColor(varName: string | null): string {
+  if (!varName) return "#000000";
+  const appearance = document.documentElement.dataset.appearance === "dark" ? "dark" : "light";
+  return CANVAS_COLOR_FALLBACKS[appearance][
+    varName as keyof (typeof CANVAS_COLOR_FALLBACKS)["light"]
+  ] ?? "#000000";
+}
 
 export function resolveCssColor(color: string): string {
-  const match = color.match(/^var\((--[^),\s]+)/);
-  if (!match) return color;
+  const varName = extractCssVarName(color);
+  if (!varName) return color;
 
   const appearance = document.documentElement.dataset.appearance ?? "";
   if (appearance !== cssColorCacheKey) {
@@ -28,7 +72,6 @@ export function resolveCssColor(color: string): string {
     cssColorCache.clear();
   }
 
-  const varName = match[1];
   const cached = cssColorCache.get(varName);
   if (cached !== undefined) return cached || color;
 
@@ -39,6 +82,27 @@ export function resolveCssColor(color: string): string {
   // flips. Re-resolving next frame is cheap once styles are ready.
   if (resolved) cssColorCache.set(varName, resolved);
   return resolved || color;
+}
+
+function canUseCanvasColor(color: string): boolean {
+  if (typeof document === "undefined") return true;
+  try {
+    if (colorValidationContext === undefined) {
+      colorValidationContext = document.createElement("canvas").getContext("2d");
+    }
+    const ctx = colorValidationContext;
+    if (!ctx) return true;
+
+    ctx.fillStyle = "#000001";
+    ctx.fillStyle = color;
+    if (ctx.fillStyle !== "#000001") return true;
+
+    ctx.fillStyle = "#000002";
+    ctx.fillStyle = color;
+    return ctx.fillStyle !== "#000002";
+  } catch {
+    return false;
+  }
 }
 
 function parseHexColor(color: string): { r: number; g: number; b: number } | null {
@@ -103,10 +167,17 @@ function hslToRgb(h: number, s: number, l: number): { r: number; g: number; b: n
 // Single chokepoint for every color handed to a canvas. Old WebKit (Safari < 16)
 // can't parse modern color syntaxes as a canvas color and throws "The string did
 // not match the expected pattern." — so resolve `var(...)` and rewrite `hsl()`
-// (which toHsl emits in the modern space-separated form) to `rgb()`. Hex / rgb()
-// pass through; anything else is returned as-is (we no longer produce color-mix()).
+// (which toHsl emits in the modern space-separated form) to `rgb()`. Everything
+// is then validated against the current canvas implementation; unsupported or
+// still-unresolved colors fall back to known theme hex values instead of reaching
+// addColorStop/fillStyle and crashing old WebKit.
 export function safeCanvasColor(color: string): string {
-  const value = (color.startsWith("var(") ? resolveCssColor(color) : color).trim();
+  const varName = extractCssVarName(color);
+  const value = (varName ? resolveCssColor(color) : color).trim();
+  if (!value || /^var\(/i.test(value) || /^color-mix\(/i.test(value)) {
+    return fallbackCanvasColor(varName);
+  }
+
   const hsl = /^hsla?\(([^)]+)\)$/i.exec(value);
   if (hsl) {
     const parts = hsl[1]
@@ -119,6 +190,7 @@ export function safeCanvasColor(color: string): string {
       return `rgb(${r}, ${g}, ${b})`;
     }
   }
+  if (!canUseCanvasColor(value)) return fallbackCanvasColor(varName);
   return value;
 }
 

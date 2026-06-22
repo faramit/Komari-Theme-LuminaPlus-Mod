@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { CanvasStrip, fillRoundedRect, safeCanvasColor } from "./CanvasStrip";
+import { getBarGeometry, getBarSlot } from "./nodeCardShared";
 import { lossHeatColor } from "@/utils/metricTone";
 import type { PingOverviewBucket } from "@/types/komari";
 
@@ -31,10 +32,8 @@ export function QualityBars({ buckets, redrawKey, onHoverIndex }: QualityBarsPro
 
   const getHoverIndex = useCallback(
     (offsetX: number, width: number) => {
-      if (bars.length === 0 || width <= 0) return null;
-      const slotWidth = width / bars.length;
-      const slot = Math.max(0, Math.min(bars.length - 1, Math.floor(offsetX / slotWidth)));
-      return bars[slot]?.index ?? null;
+      const slot = getBarSlot(offsetX, width, bars.length);
+      return slot == null ? null : bars[slot]?.index ?? null;
     },
     [bars],
   );
@@ -42,8 +41,7 @@ export function QualityBars({ buckets, redrawKey, onHoverIndex }: QualityBarsPro
   const draw = useCallback(
     (ctx: CanvasRenderingContext2D, width: number, height: number) => {
       const inactiveColor = safeCanvasColor("var(--progress-bg)");
-      const gap = bars.length > 48 ? 1 : 2;
-      const barWidth = Math.max(1, (width - gap * (bars.length - 1)) / Math.max(1, bars.length));
+      const { gap, barWidth } = getBarGeometry(width, bars.length);
       const barHeight = height * ACTIVE_BAR_HEIGHT;
       const y = height - barHeight;
 

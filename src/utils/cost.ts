@@ -1,4 +1,5 @@
 import type { NodeInfo } from "@/types/komari";
+import { classifyBillingCycleWord } from "@/utils/billing";
 import { fetchWithTimeout } from "@/utils/abort";
 import { resolveExpireTimestamp } from "@/utils/format";
 
@@ -154,13 +155,19 @@ function billingCycleDays(value: unknown): number {
   const numeric = Number(raw);
   if (Number.isFinite(numeric)) return normalizeCycleNumeric(numeric);
 
-  const normalized = raw.toLowerCase();
-  if (/^(monthly|month|mo|月|每月)$/.test(normalized)) return 30;
-  if (/^(quarterly|quarter|季|季度|每季)$/.test(normalized)) return 90;
-  if (/^(semiannual|semi-annually|halfyear|half-year|半年)$/.test(normalized)) return 180;
-  if (/^(annual|annually|yearly|year|yr|年|每年)$/.test(normalized)) return 365;
-  if (/^(lifetime|once|one-time|永久|一次性)$/.test(normalized)) return -1;
-  return 365;
+  switch (classifyBillingCycleWord(raw.toLowerCase())) {
+    case "month":
+      return 30;
+    case "quarter":
+      return 90;
+    case "halfYear":
+      return 180;
+    case "lifetime":
+      return -1;
+    case "year":
+    default:
+      return 365;
+  }
 }
 
 function cycleMonths(days: number) {
@@ -173,8 +180,12 @@ function cycleMonths(days: number) {
   return 0;
 }
 
-function remainingCycleValue(price: number, cycleDays: number, expiredAt: unknown) {
-  const expiresMs = resolveExpireTimestamp(expiredAt as string | number | null | undefined);
+function remainingCycleValue(
+  price: number,
+  cycleDays: number,
+  expiredAt: string | number | null | undefined,
+) {
+  const expiresMs = resolveExpireTimestamp(expiredAt);
   // No real expiry (unset / lifetime / Go zero-time sentinel): treat it like the
   // >100-year case below — a lifetime / one-time purchase still carries one cycle's
   // worth of prepaid value rather than silently dropping out of the remaining total.

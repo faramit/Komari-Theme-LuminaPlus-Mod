@@ -30,7 +30,11 @@ export function InstanceDetails({
   useEffect(() => {
     if (!meta || !metrics || hasAlignedOnReadyRef.current) return;
     hasAlignedOnReadyRef.current = true;
-    return onNodeReady?.();
+    // Fire the one-shot align, but don't adopt any cleanup it returns: the caller
+    // (alignCharts) returns an rAF-cancel intended for its own effect, and
+    // adopting it here would let a later meta/metrics change run that cleanup and
+    // cancel the pending scroll-into-view before it fires.
+    onNodeReady?.();
   }, [meta, metrics, onNodeReady]);
 
   if (!meta || !metrics) return null;

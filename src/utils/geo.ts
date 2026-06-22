@@ -66,14 +66,14 @@ const REGION_ALIASES: Record<string, string> = {
   uk: "GB",
   uae: "AE",
   "united arab emirates": "AE",
+  // No-space keys suffice: getCountryCodeFromRegion retries the lookup with all
+  // whitespace stripped, so spaced variants ("united kingdom" etc.) resolve here
+  // without a separate entry.
   unitedkingdom: "GB",
-  "united kingdom": "GB",
   unitedstates: "US",
-  "united states": "US",
   us: "US",
   usa: "US",
   vietnam: "VN",
-  "viet nam": "VN",
   阿根廷: "AR",
   奥地利: "AT",
   奧地利: "AT",

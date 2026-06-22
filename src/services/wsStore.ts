@@ -136,10 +136,6 @@ function alignEmptyMetricsTotals(metrics: NodeMetrics, info: NodeInfo): NodeMetr
   };
 }
 
-function mergeNodeInfo(info: NodeInfo): NodeInfo {
-  return { ...info };
-}
-
 // Surface one direction of a node's cumulative traffic counter (net_total_up/down)
 // straight from the backend — including a *decrease* when the counter legitimately
 // resets (agent reinstall, billing-cycle rollover), so the overview total and the
@@ -711,7 +707,9 @@ async function syncNodeInfo(force = false) {
       // Reuse the previous meta object when nothing displayed changed, so its
       // identity stays stable and useSyncExternalStore doesn't re-render the card.
       const isUnchanged = prev != null && shallowEqualNodeInfo(prev, info);
-      const merged = isUnchanged ? prev : mergeNodeInfo(info);
+      // Clone on change so the meta object gets a fresh identity (drives
+      // useSyncExternalStore re-renders); reuse `prev` when nothing changed.
+      const merged = isUnchanged ? prev : { ...info };
       metaByUuid[info.uuid] = merged;
       const previousMetrics = state.metricsByUuid[info.uuid];
       const nextMetrics = previousMetrics

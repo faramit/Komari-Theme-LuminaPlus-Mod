@@ -28,7 +28,7 @@ import {
 } from "@/utils/format";
 import { latencyHeatColor, lossHeatColor } from "@/utils/metricTone";
 import { formatHealthBucketTooltip } from "./pingBucketText";
-import { joinTagTitle, nodeDetailLinkLabels } from "./nodeCardShared";
+import { joinTagTitle, nodeDetailLinkLabels, pingEmptyLabels } from "./nodeCardShared";
 import type {
   NodeInfo,
   NodeMetrics,
@@ -36,7 +36,7 @@ import type {
   PingOverviewItem,
   TrafficTrendSample,
 } from "@/types/komari";
-import type { TrafficRateDisplay } from "@/utils/format";
+import type { ByteRateDisplay } from "@/utils/format";
 import type { TrafficDisplay } from "@/utils/traffic";
 
 const TRAFFIC_DOT_COUNT = 16;
@@ -408,10 +408,10 @@ function CompactNodeChips({
 
 function CompactNodeVitals({
   node,
-  loadBaseline,
+  loadFraction,
 }: {
   node: CompactNode;
-  loadBaseline: number;
+  loadFraction: number;
 }) {
   return (
     <div className="compact-node-vitals">
@@ -444,7 +444,7 @@ function CompactNodeVitals({
         label="负载"
         value={node.load1.toFixed(2)}
         detail={`${node.load5.toFixed(2)} / ${node.load15.toFixed(2)}`}
-        fraction={node.load1 / loadBaseline}
+        fraction={loadFraction}
         color="var(--progress-network)"
       />
     </div>
@@ -465,8 +465,8 @@ function CompactNodeInfoStrip({
 }: {
   node: CompactNode;
   trafficTrend: { up: TrafficTrendSample[]; down: TrafficTrendSample[] };
-  upRate: TrafficRateDisplay;
-  downRate: TrafficRateDisplay;
+  upRate: ByteRateDisplay;
+  downRate: ByteRateDisplay;
   showTrafficTotal: boolean;
   showBilling: boolean;
   showConnections: boolean;
@@ -617,10 +617,8 @@ const CompactNodeHealth = memo(function CompactNodeHealth({
   lossColor: string;
   hasHomepagePingBinding: boolean;
 }) {
-  // A node with a homepage Ping binding but no successful samples yet shows
-  // "无样本" (no samples), not "未配置" (unconfigured) — same distinction NodeCard
-  // makes via hasHomepagePingBinding.
-  const emptyText = hasHomepagePingBinding ? "无样本" : "未配置";
+  // "无样本" when bound-but-no-samples vs "未配置" when unbound — see pingEmptyLabels.
+  const { text: emptyText } = pingEmptyLabels(hasHomepagePingBinding);
   return (
     <div className="compact-node-bottom">
       <CompactHealthItem
@@ -673,7 +671,7 @@ export const CompactNodeCard = memo(function CompactNodeCard({
     isOffline,
     latencyColor,
     lossColor,
-    loadBaseline,
+    loadFraction,
     hasHomepagePingBinding,
     osName,
   } = model;
@@ -688,7 +686,7 @@ export const CompactNodeCard = memo(function CompactNodeCard({
     <article className={clsx("compact-node-card", isOffline && "is-offline")}>
       <CompactNodeHeader node={node} osName={osName} />
       <CompactNodeChips subtitle={subtitle} tags={footerTags} />
-      <CompactNodeVitals node={node} loadBaseline={loadBaseline} />
+      <CompactNodeVitals node={node} loadFraction={loadFraction} />
       <CompactNodeInfoStrip
         node={node}
         trafficTrend={trafficTrend}

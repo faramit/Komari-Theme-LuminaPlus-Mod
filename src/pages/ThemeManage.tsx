@@ -258,9 +258,11 @@ export function ThemeManage() {
   const [draftShowTrafficRating, setDraftShowTrafficRating] = useState(true);
   const [draftShowBandwidthRating, setDraftShowBandwidthRating] = useState(true);
   const [draftShowAssetRating, setDraftShowAssetRating] = useState(true);
-  const [draftTrafficRatingLabels, setDraftTrafficRatingLabels] = useState("");
-  const [draftBandwidthRatingLabels, setDraftBandwidthRatingLabels] = useState("");
-  const [draftAssetRatingLabels, setDraftAssetRatingLabels] = useState("");
+  const [draftRatingLabels, setDraftRatingLabels] = useState<Record<OverviewRatingKind, string>>({
+    traffic: "",
+    bandwidth: "",
+    asset: "",
+  });
   const [draftCompactShowTrafficTotal, setDraftCompactShowTrafficTotal] = useState(true);
   const [draftCompactShowBilling, setDraftCompactShowBilling] = useState(true);
   const [draftCompactShowUptime, setDraftCompactShowUptime] = useState(true);
@@ -340,9 +342,11 @@ export function ThemeManage() {
     setDraftShowTrafficRating(next.showTrafficRating);
     setDraftShowBandwidthRating(next.showBandwidthRating);
     setDraftShowAssetRating(next.showAssetRating);
-    setDraftTrafficRatingLabels(next.trafficRatingLabels);
-    setDraftBandwidthRatingLabels(next.bandwidthRatingLabels);
-    setDraftAssetRatingLabels(next.assetRatingLabels);
+    setDraftRatingLabels({
+      traffic: next.trafficRatingLabels,
+      bandwidth: next.bandwidthRatingLabels,
+      asset: next.assetRatingLabels,
+    });
     setDraftCompactShowTrafficTotal(next.compactShowTrafficTotal);
     setDraftCompactShowBilling(next.compactShowBilling);
     setDraftCompactShowUptime(next.compactShowUptime);
@@ -444,9 +448,9 @@ export function ThemeManage() {
       showTrafficRating: draftShowTrafficRating,
       showBandwidthRating: draftShowBandwidthRating,
       showAssetRating: draftShowAssetRating,
-      trafficRatingLabels: draftTrafficRatingLabels,
-      bandwidthRatingLabels: draftBandwidthRatingLabels,
-      assetRatingLabels: draftAssetRatingLabels,
+      trafficRatingLabels: draftRatingLabels.traffic,
+      bandwidthRatingLabels: draftRatingLabels.bandwidth,
+      assetRatingLabels: draftRatingLabels.asset,
       compactShowTrafficTotal: draftCompactShowTrafficTotal,
       compactShowBilling: draftCompactShowBilling,
       compactShowUptime: draftCompactShowUptime,
@@ -474,9 +478,7 @@ export function ThemeManage() {
       draftShowTrafficRating,
       draftShowBandwidthRating,
       draftShowAssetRating,
-      draftTrafficRatingLabels,
-      draftBandwidthRatingLabels,
-      draftAssetRatingLabels,
+      draftRatingLabels,
       draftCompactShowTrafficTotal,
       draftCompactShowBilling,
       draftCompactShowUptime,
@@ -497,7 +499,14 @@ export function ThemeManage() {
     () => managedSettingsSignature(draftThemeSettings as ThemeSettings & Record<string, unknown>),
     [draftThemeSettings],
   );
-  const isDirty = draftSignature !== sourceSignature;
+  // draftSignature uses the *normalized* cost-rate URL, which collapses any
+  // invalid input back to the default — so an invalid entry wouldn't register as
+  // dirty and the user could neither save nor reset out of it. Track the raw text
+  // separately so editing always makes the form dirty (Reset becomes available),
+  // while Save is additionally gated on validity below.
+  const costRateApiUrlDirty =
+    draftCostRateApiUrl.trim() !== sourceThemeSettings.costRateApiUrl;
+  const isDirty = draftSignature !== sourceSignature || costRateApiUrlDirty;
 
   // Clear the "已保存" banner once the user starts editing again, so a stale
   // success message doesn't sit next to a dirty form.
@@ -583,15 +592,8 @@ export function ThemeManage() {
     (clientsError instanceof Error ? clientsError.message : null);
   const noTasksYet = !tasksLoading && !clientsLoading && sortedTasks.length === 0;
   const noFilteredTaskMatch = !tasksLoading && !clientsLoading && !noTasksYet && filteredTasks.length === 0;
-  const ratingLabelDraftByKind: Record<OverviewRatingKind, string> = {
-    traffic: draftTrafficRatingLabels,
-    bandwidth: draftBandwidthRatingLabels,
-    asset: draftAssetRatingLabels,
-  };
   const setRatingLabelDraft = (kind: OverviewRatingKind, value: string) => {
-    if (kind === "traffic") setDraftTrafficRatingLabels(value);
-    else if (kind === "bandwidth") setDraftBandwidthRatingLabels(value);
-    else setDraftAssetRatingLabels(value);
+    setDraftRatingLabels((prev) => ({ ...prev, [kind]: value }));
   };
   const draftBgAlignment = parseBackgroundAlignment(draftBackgroundAlignment);
   const setBgSize = (size: BackgroundSize) =>
@@ -623,7 +625,7 @@ export function ThemeManage() {
           <button
             type="button"
             onClick={handleSave}
-            disabled={!isDirty || saving}
+            disabled={!isDirty || saving || draftCostRateApiUrlInvalid}
             className="theme-manage-button is-primary"
           >
             {saving ? <Spinner size={14} /> : <Save size={14} />}
@@ -838,6 +840,9 @@ export function ThemeManage() {
                   inputMode="numeric"
                   value={draftSurfaceOpacity}
                   onChange={(event) => {
+                    // Number("") === 0, so without this an empty field (user
+                    // clearing it to retype) would snap the value to 0.
+                    if (event.target.value.trim() === "") return;
                     const next = Number(event.target.value);
                     if (!Number.isFinite(next)) return;
                     setDraftSurfaceOpacity(Math.min(100, Math.max(0, Math.round(next))));
@@ -1052,7 +1057,7 @@ export function ThemeManage() {
                     {field.title}
                   </span>
                   <input
-                    value={ratingLabelDraftByKind[field.key]}
+                    value={draftRatingLabels[field.key]}
                     disabled={!draftShowOverviewRatings}
                     onChange={(event) => setRatingLabelDraft(field.key, event.target.value)}
                     placeholder={getDefaultOverviewRatingLabelText(

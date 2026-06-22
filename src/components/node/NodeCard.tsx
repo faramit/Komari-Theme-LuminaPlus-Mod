@@ -34,7 +34,7 @@ import { MetricBar } from "./MetricBar";
 import { MiniBars } from "./MiniBars";
 import { QualityBars } from "./QualityBars";
 import { CanvasStrip, mixSrgbTowardWhite, safeCanvasColor } from "./CanvasStrip";
-import { joinTagTitle, nodeDetailLinkLabels } from "./nodeCardShared";
+import { joinTagTitle, nodeDetailLinkLabels, pingEmptyLabels } from "./nodeCardShared";
 import {
   formatLatencyBucketSummary,
   formatLossBucketSummary,
@@ -42,7 +42,7 @@ import {
 } from "./pingBucketText";
 import { clsx } from "clsx";
 import type { NodeInfo, NodeMetrics, PingOverviewBucket, PingOverviewItem, TrafficTrendSample } from "@/types/komari";
-import type { TrafficRateDisplay } from "@/utils/format";
+import type { ByteRateDisplay } from "@/utils/format";
 import type { TrafficDisplay } from "@/utils/traffic";
 
 type NodeCardNode = NodeInfo & NodeMetrics;
@@ -314,8 +314,8 @@ function NodeTrafficSection({
   redrawKey,
 }: {
   node: NodeCardNode;
-  upRate: TrafficRateDisplay;
-  downRate: TrafficRateDisplay;
+  upRate: ByteRateDisplay;
+  downRate: ByteRateDisplay;
   trafficTrend: { up: TrafficTrendSample[]; down: TrafficTrendSample[] };
   isOnline: boolean;
   redrawKey: string;
@@ -329,6 +329,7 @@ function NodeTrafficSection({
         total={formatBytes(node.trafficUp)}
         samples={trafficTrend.up}
         live={isOnline}
+        active={node.netUp > 0}
         redrawKey={redrawKey}
         color="var(--progress-cpu)"
         icon={<ArrowUp size={15} strokeWidth={2.4} />}
@@ -340,6 +341,7 @@ function NodeTrafficSection({
         total={formatBytes(node.trafficDown)}
         samples={trafficTrend.down}
         live={isOnline}
+        active={node.netDown > 0}
         redrawKey={redrawKey}
         color="var(--status-success)"
         icon={<ArrowDown size={15} strokeWidth={2.4} />}
@@ -410,8 +412,7 @@ const NodeHealthSection = memo(function NodeHealthSection({
   onLatencyHover: (index: number | null) => void;
   onLossHover: (index: number | null) => void;
 }) {
-  const emptyTitle = hasHomepagePingBinding ? "暂无有效样本" : "未配置首页 Ping";
-  const emptyText = hasHomepagePingBinding ? "无样本" : "未配置";
+  const { title: emptyTitle, text: emptyText } = pingEmptyLabels(hasHomepagePingBinding);
 
   return (
     <div className="card-metric-section card-metric-divided server-health-grid">
@@ -656,16 +657,18 @@ function TrafficStat({
   total,
   samples,
   live,
+  active,
   redrawKey,
   color,
   icon,
 }: {
   direction: "下行" | "上行";
   totalLabel: "入站" | "出站";
-  rate: TrafficRateDisplay;
+  rate: ByteRateDisplay;
   total: string;
   samples: TrafficTrendSample[];
   live: boolean;
+  active: boolean;
   redrawKey: string;
   color: string;
   icon: ReactNode;
@@ -691,7 +694,7 @@ function TrafficStat({
               background: color,
             }}
           />
-          <span>{live ? (rate.bitsPerSec > 0 ? "实时" : "空闲") : "离线"}</span>
+          <span>{live ? (active ? "实时" : "空闲") : "离线"}</span>
         </span>
       </div>
       <div className="traffic-stat-foot">

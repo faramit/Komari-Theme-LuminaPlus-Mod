@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
+import { subscribeMediaQuery } from "@/utils/mediaQuery";
 import { isAppearance, type Appearance } from "@/utils/themeSettings";
 
 type ResolvedAppearance = "light" | "dark";
@@ -142,17 +143,14 @@ function handleVisibilityChange() {
 }
 
 let systemListenersAttached = false;
+let mediaUnsubscribe: (() => void) | null = null;
 
 function ensureSystemListeners() {
   if (systemListenersAttached || typeof window === "undefined") return;
   systemListenersAttached = true;
   const mediaQuery = getSystemAppearanceMediaQuery();
   if (mediaQuery) {
-    if (typeof mediaQuery.addEventListener === "function") {
-      mediaQuery.addEventListener("change", refreshSystemAppearance);
-    } else {
-      mediaQuery.addListener(refreshSystemAppearance);
-    }
+    mediaUnsubscribe = subscribeMediaQuery(mediaQuery, refreshSystemAppearance);
   }
   window.addEventListener("focus", refreshSystemAppearance);
   document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -161,14 +159,8 @@ function ensureSystemListeners() {
 function clearSystemListeners() {
   if (!systemListenersAttached || typeof window === "undefined") return;
   systemListenersAttached = false;
-  const mediaQuery = getSystemAppearanceMediaQuery();
-  if (mediaQuery) {
-    if (typeof mediaQuery.removeEventListener === "function") {
-      mediaQuery.removeEventListener("change", refreshSystemAppearance);
-    } else {
-      mediaQuery.removeListener(refreshSystemAppearance);
-    }
-  }
+  mediaUnsubscribe?.();
+  mediaUnsubscribe = null;
   window.removeEventListener("focus", refreshSystemAppearance);
   document.removeEventListener("visibilitychange", handleVisibilityChange);
 }

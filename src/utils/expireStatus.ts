@@ -1,10 +1,10 @@
-import { getExpireDaysRemaining } from "@/utils/format";
+import { getExpireDaysRemaining, LONG_TERM_EXPIRE_DAYS } from "@/utils/format";
 import { clamp, toHsl } from "@/utils/hsl";
 
 const EXPIRE_FULL_DAYS = 180;
 
 function expireHeatColor(daysRemaining: number): string {
-  if (daysRemaining > 36500) {
+  if (daysRemaining > LONG_TERM_EXPIRE_DAYS) {
     return "var(--status-success)";
   }
 

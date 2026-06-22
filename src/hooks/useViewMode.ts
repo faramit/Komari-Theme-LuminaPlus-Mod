@@ -1,5 +1,6 @@
 import { useCallback, useSyncExternalStore } from "react";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
+import { subscribeMediaQuery } from "@/utils/mediaQuery";
 import { isNodeViewMode, type NodeViewMode } from "@/utils/themeSettings";
 
 const DESKTOP_OVERRIDE_KEY = "komaritheme:node-view-mode-session:desktop";
@@ -96,33 +97,19 @@ const handleMediaChange = () => {
   emit();
 };
 
-function addMediaListener(mq: MediaQueryList) {
-  if (typeof mq.addEventListener === "function") {
-    mq.addEventListener("change", handleMediaChange);
-  } else {
-    mq.addListener(handleMediaChange);
-  }
-}
-
-function removeMediaListener(mq: MediaQueryList) {
-  if (typeof mq.removeEventListener === "function") {
-    mq.removeEventListener("change", handleMediaChange);
-  } else {
-    mq.removeListener(handleMediaChange);
-  }
-}
+let mediaUnsubscribe: (() => void) | null = null;
 
 function ensureMediaSubscription() {
   const mq = getMediaQuery();
   if (!mq || subscribedMediaQuery === mq) return;
-  if (subscribedMediaQuery) removeMediaListener(subscribedMediaQuery);
+  clearMediaSubscription();
   subscribedMediaQuery = mq;
-  addMediaListener(mq);
+  mediaUnsubscribe = subscribeMediaQuery(mq, handleMediaChange);
 }
 
 function clearMediaSubscription() {
-  if (!subscribedMediaQuery) return;
-  removeMediaListener(subscribedMediaQuery);
+  mediaUnsubscribe?.();
+  mediaUnsubscribe = null;
   subscribedMediaQuery = null;
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type uPlot from "uplot";
 
 // Shared chart palette. LoadChart keys colors by metric (cpu/memory/…) while
@@ -22,6 +22,15 @@ const CHART_SERIES_COLORS = [
 
 export function colorForSeries(index: number): string {
   return CHART_SERIES_COLORS[index % CHART_SERIES_COLORS.length];
+}
+
+// Axis grid/text colors for the uPlot charts. Single source so LoadChart and
+// PingChart can't drift on the dark/light literals.
+export function getAxisColors(isDark: boolean): { grid: string; text: string } {
+  return {
+    grid: isDark ? "rgba(255,255,255,0.065)" : "rgba(0,0,0,0.08)",
+    text: isDark ? "#a5a5aa" : "#52525b",
+  };
 }
 
 // Shared hover-tooltip state shape for the uPlot charts (LoadChart / PingChart).
@@ -192,6 +201,64 @@ export function getChartTooltipPosition({
   top = clamp(top, margin, maxTop);
 
   return { left, top };
+}
+
+// The cursor/tooltip pipeline shared by LoadChart and PingChart. Both wire the
+// same uPlot hooks — hide on mouseleave, and on cursor move read the hovered x
+// timestamp, anchor the tooltip via getChartTooltipPosition, and commit it — so
+// only the per-series row formatting (buildRows) and the estimated tooltip width
+// differ. `dataRef` is a ref to the live AlignedData (the chart keeps its own
+// data in a ref so the hook closure isn't stale).
+export function buildChartTooltipHooks({
+  dataRef,
+  rangeHours,
+  estimatedWidth,
+  setTooltip,
+  buildRows,
+}: {
+  dataRef: { readonly current: uPlot.AlignedData };
+  rangeHours: number;
+  estimatedWidth: number;
+  setTooltip: Dispatch<SetStateAction<ChartTooltipState>>;
+  buildRows: (idx: number) => ChartTooltipState["rows"];
+}): { onInit: (u: uPlot) => void; onSetCursor: (u: uPlot) => void } {
+  const hide = () => setTooltip((prev) => ({ ...prev, show: false }));
+  return {
+    onInit: (u) => {
+      u.root.addEventListener("mouseleave", hide);
+    },
+    onSetCursor: (u) => {
+      const idx = u.cursor.idx;
+      if (idx == null || idx < 0) {
+        hide();
+        return;
+      }
+      const timestamp = dataRef.current[0]?.[idx];
+      if (typeof timestamp !== "number") {
+        hide();
+        return;
+      }
+      const bbox = u.root.getBoundingClientRect();
+      const anchorX = u.valToPos(timestamp, "x");
+      const anchorY = typeof u.cursor.top === "number" ? u.cursor.top : bbox.height * 0.5;
+      const rows = buildRows(idx);
+      const position = getChartTooltipPosition({
+        containerWidth: bbox.width,
+        containerHeight: bbox.height,
+        anchorX,
+        anchorY,
+        rowCount: rows.length,
+        estimatedWidth,
+      });
+      setTooltip({
+        show: true,
+        left: position.left,
+        top: position.top,
+        rows,
+        time: formatTooltipTime(timestamp, rangeHours),
+      });
+    },
+  };
 }
 
 export function useResponsiveChartSize(mode: "grid" | "wide") {

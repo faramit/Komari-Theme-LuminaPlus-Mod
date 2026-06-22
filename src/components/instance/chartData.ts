@@ -82,55 +82,55 @@ function normalizePoints(points: TimedMetricPoint[], spanMissing = false) {
   };
 }
 
-export function detectTypicalIntervalMs(
+export function detectTypicalIntervalSeconds(
   times: number[],
-  fallbackMs = 60,
+  fallbackSeconds = 60,
 ) {
-  if (times.length < 2) return fallbackMs;
+  if (times.length < 2) return fallbackSeconds;
   const unique = Array.from(new Set(times)).sort((a, b) => a - b);
   const gaps: number[] = [];
   for (let index = 1; index < unique.length; index += 1) {
     const gap = unique[index] - unique[index - 1];
     if (gap > 0) gaps.push(gap);
   }
-  return gaps.length > 0 ? median(gaps) : fallbackMs;
+  return gaps.length > 0 ? median(gaps) : fallbackSeconds;
 }
 
 export function fillMissingMetricPoints(
   points: TimedMetricPoint[],
   options?: {
-    intervalMs?: number;
-    matchToleranceMs?: number;
+    intervalSeconds?: number;
+    matchToleranceSeconds?: number;
   },
 ) {
   const normalized = normalizePoints(points);
   if (normalized.points.length < 2) return normalized.points;
 
   const { points: sortedPoints, keys } = normalized;
-  const intervalMs =
-    options?.intervalMs ?? detectTypicalIntervalMs(sortedPoints.map((point) => point.time));
-  if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
+  const intervalSeconds =
+    options?.intervalSeconds ?? detectTypicalIntervalSeconds(sortedPoints.map((point) => point.time));
+  if (!Number.isFinite(intervalSeconds) || intervalSeconds <= 0) {
     return sortedPoints;
   }
 
-  const matchToleranceMs = options?.matchToleranceMs ?? intervalMs / 2;
+  const matchToleranceSeconds = options?.matchToleranceSeconds ?? intervalSeconds / 2;
   const base = Object.fromEntries(keys.map((key) => [key, null] as const));
   const filled: TimedMetricPoint[] = [];
   const start = sortedPoints[0].time;
   const end = sortedPoints[sortedPoints.length - 1].time;
   let pointer = 0;
 
-  for (let current = start; current <= end; current += intervalMs) {
+  for (let current = start; current <= end; current += intervalSeconds) {
     while (
       pointer < sortedPoints.length &&
-      sortedPoints[pointer].time < current - matchToleranceMs
+      sortedPoints[pointer].time < current - matchToleranceSeconds
     ) {
       pointer += 1;
     }
 
     const matched =
       pointer < sortedPoints.length &&
-      Math.abs(sortedPoints[pointer].time - current) <= matchToleranceMs
+      Math.abs(sortedPoints[pointer].time - current) <= matchToleranceSeconds
         ? sortedPoints[pointer]
         : null;
 
@@ -169,7 +169,7 @@ export function insertMetricGapSentinels(
   const existingTimes = sortedPoints.map((point) => point.time);
   const intervals = options?.intervals ?? new Map<string, number>();
   const defaultInterval =
-    options?.defaultInterval ?? detectTypicalIntervalMs(existingTimes);
+    options?.defaultInterval ?? detectTypicalIntervalSeconds(existingTimes);
   const toleranceRatio = options?.matchToleranceRatio ?? 0.25;
   const sentinels = new Map<number, TimedMetricPoint>();
 
@@ -183,7 +183,7 @@ export function insertMetricGapSentinels(
     const interval =
       typeof configuredInterval === "number" && configuredInterval > 0
         ? configuredInterval
-        : detectTypicalIntervalMs(validTimes, defaultInterval);
+        : detectTypicalIntervalSeconds(validTimes, defaultInterval);
     if (!Number.isFinite(interval) || interval <= 0) continue;
 
     const tolerance = Math.max(1, interval * toleranceRatio);
@@ -231,10 +231,10 @@ export function interpolateMetricGaps(
   points: TimedMetricPoint[],
   keys: string[],
   options?: {
-    maxGapMs?: number;
+    maxGapSeconds?: number;
     maxGapMultiplier?: number;
-    minCapMs?: number;
-    maxCapMs?: number;
+    minCapSeconds?: number;
+    maxCapSeconds?: number;
   },
 ) {
   if (points.length < 3 || keys.length === 0) return points;
@@ -242,8 +242,8 @@ export function interpolateMetricGaps(
   const out = points.map((point) => ({ ...point }));
   const times = out.map((point) => point.time);
   const multiplier = options?.maxGapMultiplier ?? 6;
-  const minCapMs = options?.minCapMs ?? 120;
-  const maxCapMs = options?.maxCapMs ?? 1_800;
+  const minCapSeconds = options?.minCapSeconds ?? 120;
+  const maxCapSeconds = options?.maxCapSeconds ?? 1_800;
   const clamp = (value: number, min: number, max: number) =>
     Math.max(min, Math.min(max, value));
 
@@ -257,15 +257,15 @@ export function interpolateMetricGaps(
     }
     if (validIndices.length < 2) continue;
 
-    let maxGapMs = options?.maxGapMs;
-    if (maxGapMs == null) {
+    let maxGapSeconds = options?.maxGapSeconds;
+    if (maxGapSeconds == null) {
       const gaps: number[] = [];
       for (let index = 1; index < validIndices.length; index += 1) {
         const gap = times[validIndices[index]] - times[validIndices[index - 1]];
         if (gap > 0) gaps.push(gap);
       }
       if (gaps.length === 0) continue;
-      maxGapMs = clamp(median(gaps) * multiplier, minCapMs, maxCapMs);
+      maxGapSeconds = clamp(median(gaps) * multiplier, minCapSeconds, maxCapSeconds);
     }
 
     for (let index = 0; index < validIndices.length - 1; index += 1) {
@@ -276,7 +276,7 @@ export function interpolateMetricGaps(
       const startTime = times[startIndex];
       const endTime = times[endIndex];
       const totalGap = endTime - startTime;
-      if (!Number.isFinite(totalGap) || totalGap <= 0 || totalGap > maxGapMs) {
+      if (!Number.isFinite(totalGap) || totalGap <= 0 || totalGap > maxGapSeconds) {
         continue;
       }
 

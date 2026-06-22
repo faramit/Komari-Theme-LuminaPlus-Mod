@@ -5,8 +5,8 @@ import { formatRenewalPrice } from "@/utils/billing";
 import { getExpireTextColor } from "@/utils/expireStatus";
 import {
   formatBytes,
+  formatByteRate,
   formatExpireDays,
-  formatTrafficRate,
   formatUptimeDays,
   joinDisplayParts,
   parseTags,
@@ -109,8 +109,8 @@ export function useNodeCardModel(uuid: string, pingBucketCount?: number) {
       ...pingModel,
       uptime: formatUptimeDays(metrics.uptime),
       loadFraction: Math.max(0, Math.min(1, metrics.load1 / loadBaseline)),
-      upRate: formatTrafficRate(metrics.netUp),
-      downRate: formatTrafficRate(metrics.netDown),
+      upRate: formatByteRate(metrics.netUp),
+      downRate: formatByteRate(metrics.netDown),
       isOnline: metrics.online === true,
       isOffline: metrics.online === false,
       // The duration itself is computed in OfflineMask with a ticker so it keeps

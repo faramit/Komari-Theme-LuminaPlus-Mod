@@ -105,6 +105,8 @@ export function CostSummary({
   const detailRows = useMemo(() => {
     const rows = summary?.details.slice() ?? [];
     return rows.sort((a, b) => {
+      if (a.counted !== b.counted) return a.counted ? -1 : 1;
+
       const left =
         sortField === "price"
           ? a.priceCny
