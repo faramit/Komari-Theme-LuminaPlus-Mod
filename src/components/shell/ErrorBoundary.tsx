@@ -16,12 +16,8 @@ function getErrorMessage(error: unknown) {
   return "页面渲染时发生异常";
 }
 
-// One compact block so a user screenshot — or a console line — tells us at a glance
-// which layer crashed: error.name + stack pinpoint the call site (router vs a card
-// effect vs the big-card canvas), and `mode` says whether they were on the compact
-// or large card, which the stack alone doesn't reveal.
-// Path + the `view` flag only — never the full query/hash, which could carry a
-// token in the future and would then leak through a user's screenshot of this page.
+// 只取 path 和 view 标记,不带完整 query/hash:以后这些里可能夹带 token,
+// 会通过用户截图泄露出去。
 function safeLocation(): string {
   if (typeof location === "undefined") return "(n/a)";
   const view = /[?&]view=([^&]+)/.exec(location.search || "");
@@ -44,8 +40,7 @@ function copyDiagnostics(text: string) {
   try {
     void navigator.clipboard?.writeText(text);
   } catch {
-    // Clipboard may be unavailable (insecure context / old browser); the text is
-    // still visible in the <pre> for manual selection.
+    // 剪贴板可能不可用(非安全上下文/老浏览器),文本仍显示在 <pre> 里可手动选择
   }
 }
 
@@ -125,9 +120,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    // readViewModeHint avoids hooks (we're in a class). It reports device +
-    // override, not the fully-resolved mode, but that's enough to tell compact
-    // from large for triage.
+    // 类组件里用不了 hook,所以用 readViewModeHint。它给的是 device + override 而非最终解析的 mode,但区分 compact/large 排查问题足够了
     console.error(
       "[komaritheme] render error\n" + buildDiagnostics(error, readViewModeHint()),
       info,
@@ -150,8 +143,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
 export function RouteErrorFallback() {
   const error = useRouteError();
-  // The error element renders inside the providers, so the hook works here and
-  // gives the fully-resolved view mode (the value the crashed tree was using).
+  // error element 渲染在 providers 内部,所以这里 hook 可用,拿到的是崩溃那棵树实际用的最终 view mode
   const { mode, device } = useViewMode();
   const diagnostics = buildDiagnostics(error, `${device}/${mode}`);
 

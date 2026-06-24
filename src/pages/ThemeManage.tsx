@@ -161,10 +161,9 @@ function applyClientAssignment(
   return next;
 }
 
-// Inverted lookup: client uuid → the task id (string key) it's bound to. The UI
-// keeps every client in at most one task, so a plain last-write map is exact.
-// Shared by the "全选可用" reducer below and the per-render selectable-clients
-// filter so the "which task owns this client" derivation lives in one place.
+// 反查:client uuid → 所属 task id(字符串 key)。UI 保证每个 client 最多归属一个
+// task,所以简单的后写覆盖 map 就是精确的。下面的「全选可用」reducer 和每次渲染的
+// 可选节点过滤共用它,把「某 client 归属哪个 task」的推导收在一处。
 function invertBindings(bindings: HomepagePingTaskBindings): Map<string, string> {
   const assignedTaskByClient = new Map<string, string>();
   for (const [taskId, clients] of Object.entries(bindings)) {
@@ -312,20 +311,17 @@ export function ThemeManage() {
     () => normalizeThemeSettings(config?.theme_settings),
     [config?.theme_settings],
   );
-  // A content signature of the server-side settings. React Query hands back a new
-  // `config` object on every ["public"] refetch (focus, staleness, invalidation),
-  // which gives every `source*` value a new identity even when the bytes are
-  // identical. Keying the reseed on this signature — and tracking the last value
-  // we actually applied — prevents an identical refetch from wiping unsaved
-  // draft edits while still re-seeding when the server data genuinely changes.
+  // 服务端设置的内容签名。React Query 每次 ["public"] refetch(聚焦、过期、失效)都返回
+  // 新的 `config` 对象,即使字节完全一样,每个 `source*` 值也会是新身份。用这个签名作为
+  // reseed 的判断依据,并记录上次实际应用的值,这样内容相同的 refetch 不会冲掉未保存的草稿,
+  // 而服务端数据真的变了时仍会重新 seed。
   const sourceSignature = useMemo(
     () => JSON.stringify(pickManagedThemeSettings(sourceThemeSettings)),
     [sourceThemeSettings],
   );
   const lastSeededSignatureRef = useRef<string | null>(null);
 
-  // Single source of truth for pushing server settings into the draft fields —
-  // used by both the reseed effect and the reset button, so they can't drift.
+  // 把服务端设置灌入草稿字段的唯一出口,reseed effect 和重置按钮都走它,避免两边逻辑漂移。
   const seedDrafts = useCallback((next: ResolvedThemeSettings) => {
     setDraftAppearance(next.defaultAppearance);
     setDraftDesktopNodeViewMode(next.desktopNodeViewMode);
@@ -373,9 +369,8 @@ export function ThemeManage() {
     [sortedClients],
   );
 
-  // Groups actually present in the backend, ordered the way the homepage tabs
-  // will render them given the current draft order (configured groups first,
-  // then any not-yet-ordered groups). The user reorders this list directly.
+  // 后端实际存在的分组,按首页 Tab 的渲染顺序排列(已配置的在前,未排序的在后)。
+  // 用户直接拖动这个列表来调整顺序。
   const availableGroups = useMemo(
     () => dedupeGroupLabels(sortedClients.map((client) => client.group)),
     [sortedClients],
@@ -428,9 +423,8 @@ export function ThemeManage() {
   const draftCostRateApiUrlInvalid =
     draftCostRateApiUrl.trim() !== "" && !isCostRateApiUrlValid(draftCostRateApiUrl.trim());
 
-  // The settings payload built from the current draft. It is the single source
-  // for both the save request and the dirty check — adding a new setting means
-  // touching only this object (and seedDrafts), not six parallel call sites.
+  // 由当前草稿拼出的设置 payload,保存请求和 dirty 判断都用它。新增一项设置只需改这个对象
+  // (和 seedDrafts),不必同时改六处。
   const draftThemeSettings = useMemo<ThemeSettings>(
     () => ({
       defaultAppearance: draftAppearance,
@@ -492,24 +486,20 @@ export function ThemeManage() {
     ],
   );
 
-  // Compare only settings this page actually manages. Hidden settings such as
-  // enableAdminButton/showPingChart are preserved on save via baseSettings, but
-  // must not make this form appear dirty forever.
+  // 只比较本页实际管理的设置。enableAdminButton/showPingChart 这类隐藏设置会通过
+  // baseSettings 在保存时保留,但不该让表单永远显示为 dirty。
   const draftSignature = useMemo(
     () => managedSettingsSignature(draftThemeSettings as ThemeSettings & Record<string, unknown>),
     [draftThemeSettings],
   );
-  // draftSignature uses the *normalized* cost-rate URL, which collapses any
-  // invalid input back to the default — so an invalid entry wouldn't register as
-  // dirty and the user could neither save nor reset out of it. Track the raw text
-  // separately so editing always makes the form dirty (Reset becomes available),
-  // while Save is additionally gated on validity below.
+  // draftSignature 用的是归一化后的 cost-rate URL,非法输入会被收敛回默认值,于是非法输入
+  // 不会被判为 dirty,用户既无法保存也无法重置出来。所以单独跟踪原始文本,让编辑始终把表单
+  // 标为 dirty(重置可用),而保存按钮再额外按合法性把关(见下文)。
   const costRateApiUrlDirty =
     draftCostRateApiUrl.trim() !== sourceThemeSettings.costRateApiUrl;
   const isDirty = draftSignature !== sourceSignature || costRateApiUrlDirty;
 
-  // Clear the "已保存" banner once the user starts editing again, so a stale
-  // success message doesn't sit next to a dirty form.
+  // 用户重新编辑后清掉「已保存」提示,避免过期的成功提示和 dirty 表单并存。
   useEffect(() => {
     if (isDirty) setMessage(null);
   }, [isDirty]);
@@ -519,10 +509,9 @@ export function ThemeManage() {
     [draftBindings],
   );
 
-  // Inverted lookup of which task each client is bound to, rebuilt only when
-  // draftBindings changes. Shares invertBindings() with the "全选可用" reducer so
-  // the derivation can't drift, and keeps the selectable-clients filter at
-  // O(tasks × clients) instead of re-scanning bindings per client.
+  // 每个 client 归属哪个 task 的反查,只在 draftBindings 变化时重建。与「全选可用」reducer
+  // 共用 invertBindings() 避免推导漂移,并把可选节点过滤保持在 O(tasks × clients),
+  // 而不是每个 client 都重扫一遍 bindings。
   const assignedTaskByClientUuid = useMemo(
     () => invertBindings(draftBindings),
     [draftBindings],
@@ -840,8 +829,7 @@ export function ThemeManage() {
                   inputMode="numeric"
                   value={draftSurfaceOpacity}
                   onChange={(event) => {
-                    // Number("") === 0, so without this an empty field (user
-                    // clearing it to retype) would snap the value to 0.
+                    // Number("") === 0,没有这行的话清空输入框(想重新输入)会把值跳成 0。
                     if (event.target.value.trim() === "") return;
                     const next = Number(event.target.value);
                     if (!Number.isFinite(next)) return;

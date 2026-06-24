@@ -10,11 +10,10 @@ interface CanvasStripProps {
   onHoverIndex?: (index: number | null) => void;
 }
 
-// Resolving a CSS custom property requires getComputedStyle(documentElement),
-// which forces a synchronous style recalc. With dozens of cards each drawing
-// several canvases per realtime tick this dominated render cost, so results are
-// cached per theme. The cache is keyed on the appearance dataset (read is cheap
-// and reflow-free) and cleared whenever the theme flips.
+// 解析 CSS 自定义属性要走 getComputedStyle(documentElement),会强制一次同步样式
+// 重算。几十张卡片每个 realtime tick 各画好几张 canvas 时,这是渲染开销的大头,
+// 所以按主题缓存结果。缓存以 appearance dataset 为 key(读取廉价、不触发 reflow),
+// 主题切换时清空。
 const cssColorCache = new Map<string, string>();
 let cssColorCacheKey: string | null = null;
 let colorValidationContext: CanvasRenderingContext2D | null | undefined;
@@ -76,10 +75,9 @@ export function resolveCssColor(color: string): string {
   if (cached !== undefined) return cached || color;
 
   const resolved = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
-  // Only cache a real resolution. An empty string means the stylesheet was not
-  // applied yet (e.g. first paint); caching it would leave canvases drawing the
-  // raw `var(...)` string (which fillStyle rejects → invisible) until the theme
-  // flips. Re-resolving next frame is cheap once styles are ready.
+  // 只缓存真正解析到的值。空串说明样式表还没生效(如首帧),缓存它会让 canvas 一直
+  // 画原始 `var(...)` 串(fillStyle 拒绝 → 不可见),直到主题切换。样式就绪后下一帧
+  // 重新解析很廉价。
   if (resolved) cssColorCache.set(varName, resolved);
   return resolved || color;
 }
@@ -126,13 +124,11 @@ function parseHexColor(color: string): { r: number; g: number; b: number } | nul
   return null;
 }
 
-// JS equivalent of `color-mix(in srgb, baseColor <w*100>%, white <(1-w)*100>%)`,
-// returning an rgb() string. Computed here instead of handing a `color-mix()`
-// string to the canvas because old WebKit (Safari < 16.2) can't parse color-mix()
-// as a canvas color and throws "The string did not match the expected pattern.".
-// sRGB mixing is a plain per-channel lerp on the 0–255 values, so the result is
-// numerically identical to color-mix on every browser. Falls back to the base
-// color unchanged when it isn't a hex we can parse (still a valid canvas color).
+// 等价于 `color-mix(in srgb, baseColor <w*100>%, white <(1-w)*100>%)`,返回 rgb()
+// 串。之所以自己算而不直接把 `color-mix()` 串丢给 canvas:老 WebKit(Safari < 16.2)
+// 无法把 color-mix() 当 canvas 颜色解析,会抛 "The string did not match the expected
+// pattern."。sRGB 混合就是对 0–255 通道做逐通道 lerp,各浏览器结果都和 color-mix
+// 完全一致。解析不出 hex 时原样返回 baseColor(仍是合法 canvas 颜色)。
 export function mixSrgbTowardWhite(baseColor: string, baseWeight: number): string {
   const rgb = parseHexColor(baseColor);
   if (!rgb) return baseColor;
@@ -164,13 +160,11 @@ function hslToRgb(h: number, s: number, l: number): { r: number; g: number; b: n
   };
 }
 
-// Single chokepoint for every color handed to a canvas. Old WebKit (Safari < 16)
-// can't parse modern color syntaxes as a canvas color and throws "The string did
-// not match the expected pattern." — so resolve `var(...)` and rewrite `hsl()`
-// (which toHsl emits in the modern space-separated form) to `rgb()`. Everything
-// is then validated against the current canvas implementation; unsupported or
-// still-unresolved colors fall back to known theme hex values instead of reaching
-// addColorStop/fillStyle and crashing old WebKit.
+// 所有交给 canvas 的颜色都过这一个收口。老 WebKit(Safari < 16)无法把现代颜色语法
+// 当 canvas 颜色解析,会抛 "The string did not match the expected pattern."——所以这里
+// 解析 `var(...)`,并把 `hsl()`(toHsl 输出的现代空格分隔形式)改写成 `rgb()`。再统一
+// 拿当前 canvas 实现校验;不支持或仍未解析的颜色回退到已知的主题 hex 值,而不是带着它
+// 走到 addColorStop/fillStyle 把老 WebKit 搞崩。
 export function safeCanvasColor(color: string): string {
   const varName = extractCssVarName(color);
   const value = (varName ? resolveCssColor(color) : color).trim();

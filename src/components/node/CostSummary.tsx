@@ -83,10 +83,9 @@ export function CostSummary({
   const nodes = useAllNodeMeta();
   const themeSettings = useThemeSettings();
   const rateApiUrl = themeSettings.costRateApiUrl;
-  // The parent (NodeGrid) decides whether to mount this and whether to show the
-  // launcher (showLauncher); here we only gate on data availability. Gating on
-  // showCostSummary would wrongly null out the whole component — and its floating
-  // launcher — whenever the card's inline detail button is turned off.
+  // 是否挂载、是否显示悬浮球(showLauncher)由父组件 NodeGrid 决定;这里只看数据
+  // 是否可用。若改成依赖 showCostSummary,会在卡内详情按钮关闭时错误地把整个组件
+  // (连同悬浮球)一起 null 掉。
   const enabled = themeSettings.isReady && nodes.length > 0;
   const rateQuery = useQuery({
     queryKey: ["cost-rates", rateApiUrl],
@@ -168,10 +167,9 @@ export function CostSummary({
     };
   }, [resolvedOpen, setOpen]);
 
-  // While the mobile bottom-sheet is open, fold away the home floating controls:
-  // they're pinned top-right at a higher z-index and otherwise overlap the sheet's
-  // close button, stealing the tap. CSS scopes the actual hiding to the sheet
-  // breakpoint; the class is harmless on desktop where the two don't overlap.
+  // 移动端底部弹层打开时,收起首页的悬浮控件:它们固定在右上角、z-index 更高,
+  // 否则会盖住弹层的关闭按钮、抢走点击。实际隐藏由 CSS 限定在弹层断点内;桌面端
+  // 两者不重叠,加这个 class 无害。
   useEffect(() => {
     if (!resolvedOpen) return;
     document.body.classList.add("cost-summary-open");

@@ -1,4 +1,4 @@
-/* Cost summary */
+/* 费用汇总 */
 .cost-summary-panel {
   position: fixed;
   top: 76px;
@@ -524,9 +524,8 @@
     bottom: max(18px, env(safe-area-inset-bottom));
   }
 
-  /* Sheet is open: hide the top-right home controls so they stop overlapping the
-     sheet's close button. visibility (not just opacity) also drops them from the
-     hit-test, so the X underneath becomes tappable. */
+  /* 弹层打开时:隐藏右上角的首页控件,以免它们盖住弹层的关闭按钮。用 visibility(而不只是 opacity)
+     还能把它们从命中测试中移除,使下方的 X 可以点击。 */
   body.cost-summary-open .floating-controls {
     opacity: 0;
     visibility: hidden;

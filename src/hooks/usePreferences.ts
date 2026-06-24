@@ -64,7 +64,7 @@ function writeStorageItem(key: string, value: string) {
   try {
     localStorage.setItem(key, value);
   } catch {
-    // Keep the in-memory preference when persistent storage is unavailable.
+    // 持久化存储不可用时，保留内存里的 preference。
   }
 }
 
@@ -80,7 +80,7 @@ function readStoredAppearance() {
 }
 
 function persistAppearance(value: Appearance) {
-  // Store as JSON string for compatibility with older theme bundles that parsed this key.
+  // 存成 JSON 字符串，以兼容会解析这个 key 的旧主题包。
   writeStorageItem(APPEARANCE_STORAGE_KEY, JSON.stringify(value));
 }
 
@@ -130,8 +130,8 @@ function commit(next: Partial<PrefsState>) {
   emit();
 }
 
-// When in "system" mode, re-resolve against the OS preference. Named (not an
-// inline closure) so the listeners below can be removed again.
+// "system" 模式下，根据 OS 偏好重新解析。用具名函数（而非内联闭包），
+// 这样下面的 listener 才能被移除。
 function refreshSystemAppearance() {
   if (snapshot.appearance === "system") {
     commit({ appearance: "system" });
@@ -165,13 +165,11 @@ function clearSystemListeners() {
   document.removeEventListener("visibilitychange", handleVisibilityChange);
 }
 
-// Initialize at module load — before React renders — so the persisted appearance
-// is on <html> ahead of first paint (no flash) and none of this runs during the
-// render phase. The system-preference listeners are attached lazily by the first
-// subscriber (and torn down with the last) instead of leaking for the page
-// lifetime. The server-side default (when there's no explicit preference) is
-// applied separately by the effect in usePreferences, which reads it from the
-// shared React Query ["public"] cache instead of a duplicate fetch here.
+// 在模块加载时（React 渲染之前）初始化，让持久化的 appearance 在首帧之前就落到
+// <html> 上（避免闪烁），且这些都不在 render 阶段运行。系统偏好的 listener 由第一个
+// 订阅者懒加载（最后一个订阅者注销时拆除），不会泄漏到整个页面生命周期。服务端默认值
+//（在没有显式偏好时）由 usePreferences 的 effect 单独应用，它从共享的 React Query
+// ["public"] 缓存里读取，而不是在这里重复发一次请求。
 function initializeAppearance() {
   const stored = readStoredAppearance();
   hasExplicitAppearancePreference = stored.hasExplicitPreference;

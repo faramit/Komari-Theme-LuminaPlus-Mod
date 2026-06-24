@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { resolveFlatConnectionsTcp, resolveTrafficTotal } from "@/services/wsStore";
 
-// Drive a sequence of raw cumulative readings through the resolver the same way
-// resolveTrafficTotals does each tick: thread the previous display value (which
-// the store keeps on the node metrics) forward.
+// 像 resolveTrafficTotals 每个 tick 那样,把一串原始累计读数喂给 resolver:把上一个显示值
+//(store 存在 node metrics 上)往后传。
 function drive(readings: number[]): number[] {
   let previous = 0;
   return readings.map((raw) => {
@@ -18,10 +17,9 @@ describe("resolveTrafficTotal", () => {
   });
 
   it("holds the previous value when a tick reports zero (missing/partial sample)", () => {
-    // A zero reading is an offline/heartbeat frame or a payload that omitted
-    // net_total_up/down — not real traffic. Holding avoids a flicker to 0, and
-    // (the regression we are guarding) avoids re-inflating the total when the real
-    // reading returns: the overview used to roughly double on every offline flap.
+    // 读到 0 是 offline/heartbeat 帧或漏了 net_total_up/down 的 payload,不是真实流量。
+    // 保持上一个值能避免闪烁到 0,也(这正是我们要防的回归)避免真实读数回来时重复抬高总量:
+    // 概览以前每次 offline 抖动都会大致翻倍。
     expect(drive([50, 0, 51])).toEqual([50, 50, 51]);
   });
 
@@ -30,13 +28,12 @@ describe("resolveTrafficTotal", () => {
   });
 
   it("follows a genuine counter reset down (reboot / billing-cycle rollover)", () => {
-    // The backend counter legitimately drops; we surface it so the overview and the
-    // traffic-limit bars track the backend instead of staying inflated.
+    // 后端计数器合理下降;我们如实透传,让概览和流量限额条跟随后端而不是停在虚高值。
     expect(drive([50, 5, 6])).toEqual([50, 5, 6]);
   });
 
   it("ignores a zero gap but still follows a later real reset", () => {
-    // 50 → offline (0, held) → back after reset with a small real counter.
+    // 50 → offline(0,保持)→ 重置后带一个小的真实计数回来。
     expect(drive([50, 0, 2, 3])).toEqual([50, 50, 2, 3]);
   });
 

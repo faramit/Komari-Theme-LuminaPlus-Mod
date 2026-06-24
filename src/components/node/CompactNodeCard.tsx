@@ -26,7 +26,12 @@ import {
   formatBytes,
   trimFixed,
 } from "@/utils/format";
-import { latencyHeatColor, lossHeatColor } from "@/utils/metricTone";
+import {
+  latencyHeatColor,
+  lossHeatColor,
+  speedRateColor,
+  speedRateColorFromBytes,
+} from "@/utils/metricTone";
 import { formatHealthBucketTooltip } from "./pingBucketText";
 import { joinTagTitle, nodeDetailLinkLabels, pingEmptyLabels } from "./nodeCardShared";
 import type {
@@ -71,10 +76,9 @@ function CompactGauge({
   color: string;
   fraction: number;
 }) {
-  // Single-element segmented bar: a hard-stop fill gradient up to the fraction,
-  // with a repeating mask punching the 18 inter-segment gutters. Replaces 18
-  // per-segment <span>s (×4 gauges/card) — the per-tick reconciliation + style
-  // recalc of those spans on every off-screen card was a top render cost.
+  // 单元素分段条:填充用一个 hard-stop 渐变到 fraction 处,再叠一个重复 mask 打出
+  // 18 个段间空隙。替代了 18 个逐段 <span>(每卡 ×4 个 gauge)—— 那些 span 在每个
+  // 屏外卡片上每 tick 的 reconcile + 样式重算曾是渲染开销大头。
   const style = {
     "--compact-gauge-color": color,
     "--compact-gauge-fill": `${clamp01(fraction) * 100}%`,
@@ -141,9 +145,12 @@ function CompactTrafficPulse({
         const downValue = downSample?.value ?? 0;
         const active = upValue > 0 || downValue > 0;
         const level = Math.max(upSample?.level ?? 0, downSample?.level ?? 0);
-        const color = downValue >= upValue ? "var(--status-success)" : "var(--progress-cpu)";
+        // 每点按其主方向(上/下取大)速率的单位档上色,与大卡的速度档色一致;大小/透明度仍按 level。
+        // 仅活跃点计算颜色,空闲点直接用中性色,省掉无谓的 formatByteRate。
         const style = {
-          "--compact-traffic-dot-color": active ? color : "var(--progress-bg)",
+          "--compact-traffic-dot-color": active
+            ? speedRateColorFromBytes(Math.max(upValue, downValue))
+            : "var(--progress-bg)",
           "--compact-traffic-dot-scale": active ? `${0.68 + level * 0.62}` : "0.48",
           opacity: active ? 0.5 + level * 0.42 : 0.38,
         } as CSSProperties;
@@ -377,9 +384,8 @@ function CompactNodeChips({
   subtitle: string;
   tags: CompactTag[];
 }) {
-  // Full tag list lives in the lane's tooltip; the chips carry no title of their
-  // own so hovering any chip falls through to it — that's how tags that wrap out
-  // of the clipped lane stay discoverable, without a visible "+N" badge.
+  // 完整 tag 列表挂在 lane 的 tooltip 上;chip 不带自己的 title,hover 会穿透到 lane 上 ——
+  // 被裁剪 lane 折行挤出去的 tag 就靠这个保持可见,不用显示"+N"角标。
   const tagTitle = joinTagTitle(tags);
 
   return (
@@ -490,13 +496,13 @@ function CompactNodeInfoStrip({
           icon={<ArrowUp size={12} strokeWidth={2.3} />}
           value={upRate.value}
           unit={upRate.unit}
-          color="var(--progress-cpu)"
+          color={speedRateColor(upRate.unit)}
         />
         <CompactInfoRow
           icon={<ArrowDown size={12} strokeWidth={2.3} />}
           value={downRate.value}
           unit={downRate.unit}
-          color="var(--status-success)"
+          color={speedRateColor(downRate.unit)}
         />
         <CompactTrafficPulse up={trafficTrend.up} down={trafficTrend.down} />
       </CompactInfoTile>
@@ -551,9 +557,8 @@ function CompactNodeInfoStrip({
   );
 }
 
-// Mandatory traffic-quota bar: label + used / limit on one line (compact cards are
-// dense, so the remaining figure is dropped here), with a single-element heat fill
-// (no canvas, no per-segment spans) reusing the gauge track to stay cheap per tick.
+// 流量阈值条:label + used / limit 同一行(紧凑卡片很挤,这里省掉剩余量),
+// 用单元素热力填充(无 canvas、无逐段 span)复用 gauge 轨道,保持每 tick 低开销。
 function CompactTrafficBar({
   traffic,
   uptimeLabel,
@@ -600,10 +605,9 @@ function CompactTrafficBar({
   );
 }
 
-// Memoized: every prop is ping-derived and stays reference-stable across the
-// ~1s metrics ticks that re-render the parent card (ping data only refreshes
-// ~every 60s), so this skips re-rendering the latency/loss HealthBars subtree —
-// the dominant per-tick DOM cost — until the ping data actually changes.
+// memo:每个 prop 都源自 ping,在父卡片每 ~1s 指标 tick 重渲染时引用稳定(ping 数据
+// ~60s 才刷新一次),所以在 ping 数据真正变化前,跳过重渲染 latency/loss HealthBars
+// 这棵子树 —— 它是每 tick DOM 开销的大头。
 const CompactNodeHealth = memo(function CompactNodeHealth({
   ping,
   pingBuckets,
@@ -617,7 +621,7 @@ const CompactNodeHealth = memo(function CompactNodeHealth({
   lossColor: string;
   hasHomepagePingBinding: boolean;
 }) {
-  // "无样本" when bound-but-no-samples vs "未配置" when unbound — see pingEmptyLabels.
+  // 已绑定但无样本时显示"无样本",未绑定时显示"未配置" —— 见 pingEmptyLabels。
   const { text: emptyText } = pingEmptyLabels(hasHomepagePingBinding);
   return (
     <div className="compact-node-bottom">
@@ -679,7 +683,7 @@ export const CompactNodeCard = memo(function CompactNodeCard({
   const showBilling = themeSettings.isReady && themeSettings.compactShowBilling;
   const showUptime = themeSettings.isReady && themeSettings.compactShowUptime;
   const showConnections = themeSettings.isReady && themeSettings.showConnections;
-  // Skip the format work entirely when the toggle is off or the node is offline.
+  // 开关关闭或节点离线时,完全跳过格式化工作。
   const uptimeLabel = showUptime && !isOffline ? formatCompactUptime(node.uptime) : "";
 
   return (

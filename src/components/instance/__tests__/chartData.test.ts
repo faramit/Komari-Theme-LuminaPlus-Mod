@@ -8,7 +8,7 @@ import {
 
 describe("fillMissingMetricPoints", () => {
   it("keeps the newest sample's own timestamp instead of snapping it to the grid", () => {
-    // Last sample (t=35) is off the 10ms grid; it must not be pulled back to t=30.
+    // 末点 (t=35) 不在 10ms 网格上；不能被拉回到 t=30。
     const points: TimedMetricPoint[] = [
       { time: 0, v: 1 },
       { time: 10, v: 2 },
@@ -38,7 +38,7 @@ describe("cutPeakValues", () => {
     const points = [
       { time: 1, t1: 50 },
       { time: 2, t1: 52 },
-      { time: 3, t1: null }, // packet loss — must stay a gap
+      { time: 3, t1: null }, // 丢包——必须保持为空缺
       { time: 4, t1: 51 },
       { time: 5, t1: 50 },
     ];
@@ -46,7 +46,7 @@ describe("cutPeakValues", () => {
     const out = cutPeakValues(points, ["t1"]);
 
     expect(out[2].t1).toBeNull();
-    // Surrounding samples remain real numbers (EWMA-smoothed), not nulled.
+    // 周围的采样仍是真实数字 (EWMA 平滑后)，没有被置空。
     expect(typeof out[0].t1).toBe("number");
     expect(typeof out[4].t1).toBe("number");
   });
@@ -77,9 +77,8 @@ describe("insertMetricGapSentinels — three-state ping semantics", () => {
     points.find((point) => point.time === time);
 
   it("keeps an off-phase anchor as undefined (spannable), not null", () => {
-    // A and B sample every 60s but staggered by 30s, so each creates anchors the
-    // other never sampled. Those off-phase cells must stay undefined so uPlot spans
-    // them instead of cutting every line — the original blank-chart bug.
+    // A 和 B 都每 60s 采样但错开 30s，所以各自建的 anchor 对方都没采过。这些 off-phase 格子
+    // 必须保持 undefined，uPlot 才会跨过而非切断每条线——正是当初的空白图表 bug。
     const points: TimedMetricPoint[] = [
       { time: 0, A: 10 },
       { time: 30, B: 20 },
@@ -102,7 +101,7 @@ describe("insertMetricGapSentinels — three-state ping semantics", () => {
   it("preserves real loss (null) as a break", () => {
     const points: TimedMetricPoint[] = [
       { time: 0, A: 10 },
-      { time: 60, A: null }, // value <= 0 already encoded as null by the bucketer
+      { time: 60, A: null }, // value <= 0 已被分桶器编码成 null
       { time: 120, A: 12 },
     ];
 
@@ -114,7 +113,7 @@ describe("insertMetricGapSentinels — three-state ping semantics", () => {
   it("tolerates a single missed sample (gap <= 2x interval)", () => {
     const points: TimedMetricPoint[] = [
       { time: 0, A: 10 },
-      { time: 120, A: 12 }, // one missed sample at 60 → gap is exactly 2x interval
+      { time: 120, A: 12 }, // 60 处漏了一个采样 → 空缺正好是 2 倍 interval
       { time: 180, A: 13 },
     ];
 
@@ -124,8 +123,8 @@ describe("insertMetricGapSentinels — three-state ping semantics", () => {
   });
 
   it("breaks only the gapped task on a long outage, sparing co-located anchors", () => {
-    // A goes dark 60..300 while B keeps sampling. A's break must land on B's anchors
-    // (merged, not skipped) without clobbering B's real values.
+    // A 在 60..300 间中断，而 B 持续采样。A 的断点必须落到 B 的 anchor 上 (合并而非跳过)，
+    // 且不能破坏 B 的真实值。
     const points: TimedMetricPoint[] = [
       { time: 0, A: 10, B: 100 },
       { time: 60, A: 11, B: 101 },
@@ -138,13 +137,13 @@ describe("insertMetricGapSentinels — three-state ping semantics", () => {
     const out = insertMetricGapSentinels(points, opts({ A: 60, B: 60 }));
 
     const p120 = at(out, 120)!;
-    expect(p120.A).toBeNull(); // A broken, merged onto B's existing anchor
-    expect(p120.B).toBe(102); // B untouched
+    expect(p120.A).toBeNull(); // A 断开，合并到 B 已有的 anchor 上
+    expect(p120.B).toBe(102); // B 不受影响
   });
 
   it("merges sentinels when multiple tasks gap at the same time", () => {
-    // A and B both go dark 60..300 with no anchors in between, so each seeds its own
-    // sentinel at the same expected times — the second must merge, not overwrite.
+    // A 和 B 都在 60..300 间中断且其间没有 anchor，所以各自在相同的期望时间播下哨兵——
+    // 第二个必须合并而非覆盖。
     const points: TimedMetricPoint[] = [
       { time: 0, A: 10, B: 100 },
       { time: 60, A: 11, B: 101 },

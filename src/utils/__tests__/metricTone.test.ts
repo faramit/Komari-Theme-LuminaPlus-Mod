@@ -1,11 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { trafficUsageColor } from "@/utils/metricTone";
+import {
+  speedRateColor,
+  speedRateColorFromBytes,
+  trafficQuotaSegmentColor,
+  trafficUsageColor,
+} from "@/utils/metricTone";
 
 function hue(color: string): number {
   const match = /^hsl\(([\d.]+)/.exec(color);
   if (!match) throw new Error(`not an hsl color: ${color}`);
   return Number(match[1]);
 }
+
+function oklchHue(color: string): number {
+  const match = /^oklch\([\d.]+ [\d.]+ ([\d.]+)\)$/.exec(color);
+  if (!match) throw new Error(`not an oklch color: ${color}`);
+  return Number(match[1]);
+}
+
 
 describe("trafficUsageColor", () => {
   it("returns the success token for no usage / unlimited / invalid", () => {
@@ -15,14 +27,13 @@ describe("trafficUsageColor", () => {
   });
 
   it("stays green while at least half the quota remains", () => {
-    // Green band (~140–150°) for used ≤ 50%, so a healthy quota never looks like a warning.
+    // used ≤ 50% 时处于绿色区(约 140–150°),健康配额不会被误显示成警告色
     expect(hue(trafficUsageColor(0.1))).toBeGreaterThan(140);
     expect(hue(trafficUsageColor(0.5))).toBeGreaterThan(140);
   });
 
   it("actually reaches red near the limit — the regression it fixes", () => {
-    // Previously red (hue ≲ 15°) was unreachable below 85% used; the bar read as
-    // green→light-green across the whole common range.
+    // 以前 85% 以下根本到不了红色(hue ≲ 15°),整个常用区间都只是绿→浅绿
     expect(hue(trafficUsageColor(0.95))).toBeLessThan(20);
     expect(hue(trafficUsageColor(1))).toBeLessThan(12);
   });
@@ -34,5 +45,56 @@ describe("trafficUsageColor", () => {
       expect(h).toBeLessThanOrEqual(prev + 1e-6);
       prev = h;
     }
+  });
+});
+
+describe("trafficQuotaSegmentColor", () => {
+  it("returns OKLCH and holds solid green across the short safe zone", () => {
+    // 按位置取色,所以每段颜色固定、与填充量无关。绿色保持区很短(约 10%),避免绿色占主导,
+    // 过了这段 hue 就往黄色下降
+    expect(trafficQuotaSegmentColor(0)).toBe("oklch(0.7200 0.1600 150.00)");
+    expect(trafficQuotaSegmentColor(0.05)).toBe("oklch(0.7200 0.1600 150.00)");
+    expect(oklchHue(trafficQuotaSegmentColor(0.3))).toBeLessThan(128);
+  });
+
+  it("rotates the OKLCH hue green→yellow→orange→red so the zones stay distinct", () => {
+    expect(oklchHue(trafficQuotaSegmentColor(0.03))).toBeGreaterThan(145); // 绿
+    expect(oklchHue(trafficQuotaSegmentColor(0.44))).toBeGreaterThan(95); // 黄
+    expect(oklchHue(trafficQuotaSegmentColor(0.44))).toBeLessThan(125);
+    expect(oklchHue(trafficQuotaSegmentColor(0.72))).toBeLessThan(70); // 橙
+    expect(oklchHue(trafficQuotaSegmentColor(1))).toBeLessThan(35); // 红
+  });
+
+  it("warms monotonically — OKLCH hue never rises with position", () => {
+    let prev = Number.POSITIVE_INFINITY;
+    for (let p = 0; p <= 1.0001; p += 0.05) {
+      const h = oklchHue(trafficQuotaSegmentColor(Math.min(p, 1)));
+      expect(h).toBeLessThanOrEqual(prev + 1e-6);
+      prev = h;
+    }
+  });
+
+  it("clamps positions outside 0..1", () => {
+    expect(trafficQuotaSegmentColor(-1)).toBe(trafficQuotaSegmentColor(0));
+    expect(trafficQuotaSegmentColor(2)).toBe(trafficQuotaSegmentColor(1));
+  });
+});
+
+describe("speedRateColor", () => {
+  it("maps each rate-unit tier to its own heat token (KB→MB→GB→TB)", () => {
+    expect(speedRateColor("KB/s")).toBe("var(--speed-kb)");
+    expect(speedRateColor("MB/s")).toBe("var(--speed-mb)");
+    expect(speedRateColor("GB/s")).toBe("var(--speed-gb)");
+    expect(speedRateColor("TB/s")).toBe("var(--speed-tb)");
+  });
+
+  it("maps idle (B/s) to the low green tier, only unknown units go neutral", () => {
+    expect(speedRateColor("B/s")).toBe("var(--speed-kb)");
+    expect(speedRateColor("")).toBe("var(--text-tertiary)");
+  });
+
+  it("speedRateColorFromBytes routes raw bytes/sec through the unit tier", () => {
+    expect(speedRateColorFromBytes(0)).toBe("var(--speed-kb)");
+    expect(speedRateColorFromBytes(5 * 1024 * 1024)).toBe("var(--speed-mb)");
   });
 });

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { clsx } from "clsx";
+import { Spinner } from "@/components/ui/Spinner";
 
 export function InstancePanel({
   title,
@@ -25,5 +26,17 @@ export function InstancePanel({
       </header>
       {children}
     </section>
+  );
+}
+
+// 图表加载态:带标题面板 + 居中 Spinner + 文案。LoadChart/PingChart 共用,避免各写一份漂移。
+export function InstanceChartLoading({ title }: { title: string }) {
+  return (
+    <InstancePanel title={title}>
+      <div className="instance-chart-loading" aria-busy>
+        <Spinner size={26} />
+        <span>加载中…</span>
+      </div>
+    </InstancePanel>
   );
 }

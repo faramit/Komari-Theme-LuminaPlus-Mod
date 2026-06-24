@@ -31,16 +31,15 @@ function inDays(days: number) {
 
 describe("calculateCostSummary", () => {
   it("scales remaining value by prepaid cycles (price is per-cycle)", () => {
-    // 10 USD (=70 CNY) per 30-day cycle, paid through ~1 year out → ~12 cycles
-    // of prepaid value remaining. `price` is the per-cycle cost (confirmed by the
-    // backend Client model + auto-renewal logic), so remaining must scale up.
+    // 10 USD(=70 CNY)每 30 天一个周期,付到约 1 年后 → 还剩约 12 个周期的预付价值。
+    // price 是每周期价格(后端 Client model + 自动续费逻辑已确认),所以剩余价值要按周期数放大
     const summary = calculateCostSummary(
       [node({ price: 10, currency: "USD", billing_cycle: 30, expired_at: inDays(360) })],
       [],
       RATES,
     );
     expect(summary.paidCount).toBe(1);
-    // 70 CNY/cycle × (360 days / 30 days) = ~840 CNY.
+    // 70 CNY/周期 × (360 天 / 30 天) ≈ 840 CNY
     expect(summary.remainingCny).toBeGreaterThan(70 * 11);
     expect(summary.remainingCny).toBeLessThan(70 * 13);
   });
@@ -55,8 +54,8 @@ describe("calculateCostSummary", () => {
   });
 
   it("counts a no-expiry node as one cycle of remaining value, not zero", () => {
-    // Regression: never-expiring nodes (Go zero-time / 0 / -1 / unset) used to be
-    // read as 已过期 and drop their prepaid value from 剩余价值 entirely.
+    // 防回归:永不过期的节点(Go 零值时间 / 0 / -1 / 未设置)以前会被当成已过期,
+    // 导致其预付价值被完全从剩余价值里漏掉
     for (const sentinel of ["0001-01-01T00:00:00Z", "0", "-1", ""]) {
       const summary = calculateCostSummary(
         [node({ price: 10, currency: "USD", billing_cycle: 30, expired_at: sentinel })],
@@ -64,13 +63,13 @@ describe("calculateCostSummary", () => {
         RATES,
       );
       expect(summary.paidCount).toBe(1);
-      // 10 USD × 7 = 70 CNY = one cycle's worth (matches the >100y lifetime case).
+      // 10 USD × 7 = 70 CNY = 一个周期的价值(和 >100 年的长期节点一致)
       expect(summary.remainingCny).toBeCloseTo(70, 5);
     }
   });
 
   it("treats an unset currency as the target currency (CNY), not USD", () => {
-    // Regression: blank currency defaulted to USD, inflating a CNY-priced node ~7×.
+    // 防回归:空 currency 以前默认按 USD 算,会把 CNY 定价的节点放大约 7 倍
     const summary = calculateCostSummary(
       [node({ price: 100, currency: "", billing_cycle: "monthly" })],
       [],
@@ -121,7 +120,7 @@ describe("calculateCostSummary — annualized total & cycle validation", () => {
       [],
       RATES,
     );
-    // monthly: 70/mo ; yearly: 840/yr = 70/mo → 140/mo total → 1680/yr
+    // 月付:70/月;年付:840/年 = 70/月 → 合计 140/月 → 1680/年
     expect(summary.monthlyCny).toBeCloseTo(140, 6);
     expect(summary.totalCny).toBeCloseTo(1680, 6);
     expect(summary.totalCny).toBeCloseTo(summary.monthlyCny * 12, 6);

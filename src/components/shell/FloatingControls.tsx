@@ -16,9 +16,7 @@ const APPEARANCE_OPTIONS = [
 
 export function FloatingControls() {
   const [searchParams] = useSearchParams();
-  // Read the route before any node-store hook runs: the theme-manage view renders
-  // nothing here, and useNodeStoreStatus (below) would otherwise spin up the live
-  // node polling just to immediately discard it.
+  // 在任何 node-store hook 跑之前先读路由:theme-manage 视图这里什么都不渲染,否则下面的 useNodeStoreStatus 会白启动实时节点轮询又立刻丢弃
   if (searchParams.get("view") === "theme-manage") {
     return null;
   }

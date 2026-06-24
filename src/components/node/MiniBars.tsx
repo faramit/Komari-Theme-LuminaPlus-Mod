@@ -5,23 +5,22 @@ import { latencyHeatColor } from "@/utils/metricTone";
 import type { PingOverviewBucket } from "@/types/komari";
 
 interface MiniBarsProps {
-  /** Aggregated latency buckets (always a fixed-length window). */
+  /** 聚合后的延迟分桶(始终是定长窗口)。 */
   buckets: PingOverviewBucket[];
-  /** Denominator for 0..1 normalization (max latency across the window). */
+  /** 归一化到 0..1 的分母(窗口内的最大延迟)。 */
   max: number;
   redrawKey?: string;
   onHoverIndex?: (index: number | null) => void;
 }
 
-/** Pixel-matched latency histogram driven by aggregated ping buckets. */
+/** 由聚合 ping 分桶驱动、像素对齐的延迟柱状图。 */
 export function MiniBars({ buckets, max, redrawKey, onHoverIndex }: MiniBarsProps) {
   const bars = useMemo(
     () =>
       buckets.map((bucket) => ({
         value: bucket.value ?? 0,
         index: bucket.index,
-        // Normalize to a canvas-safe color here (per bucket, on data change) rather
-        // than per bar on every redraw.
+        // 在这里(按桶、数据变化时)归一化成 canvas 安全色,而不是每次重绘对每根柱子算。
         tone: safeCanvasColor(latencyHeatColor(bucket.value)),
       })),
     [buckets],
@@ -35,8 +34,8 @@ export function MiniBars({ buckets, max, redrawKey, onHoverIndex }: MiniBarsProp
     [bars],
   );
 
-  // Stable unless the bucket data (bars) or scale (max) changes, so the canvas
-  // doesn't redraw on every parent metrics tick — only on ping refreshes.
+  // 除非分桶数据(bars)或刻度(max)变化,否则保持稳定,这样 canvas 不会在父组件
+  // 每个 metrics tick 都重绘——只在 ping 刷新时重绘。
   const draw = useCallback(
     (ctx: CanvasRenderingContext2D, width: number, height: number) => {
       const inactiveColor = safeCanvasColor("var(--progress-bg)");

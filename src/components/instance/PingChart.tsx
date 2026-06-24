@@ -3,7 +3,7 @@ import UplotReact from "uplot-react";
 import type uPlot from "uplot";
 import { Eye, EyeOff, RefreshCw } from "lucide-react";
 import { usePingRecords } from "@/hooks/useRecords";
-import { InstancePanel } from "./InstancePanel";
+import { InstancePanel, InstanceChartLoading } from "./InstancePanel";
 import {
   buildChartTooltipHooks,
   colorForSeries,
@@ -23,9 +23,8 @@ import { usePreferences } from "@/hooks/usePreferences";
 import type { PingRecord } from "@/types/komari";
 import type { TimedMetricPoint } from "./chartData";
 
-// Caller passes an ascending-sorted array so min/max/p50/p99 all reuse one sort
-// instead of re-sorting (and instead of `Math.min(...values)`, which can throw
-// RangeError when spreading a large series).
+// 调用方传入已升序排好的数组，min/max/p50/p99 共用一次排序，不必重排（也避免
+// `Math.min(...values)`——展开大数组会抛 RangeError）。
 function percentileFromSorted(sorted: number[], ratio: number) {
   if (sorted.length === 0) return null;
   const index = (sorted.length - 1) * ratio;
@@ -107,9 +106,8 @@ export function PingChart({
   }, [tasks]);
 
   const chart = useMemo(() => {
-    // Build the full aligned series for every task. Visibility is applied via
-    // each series' `show` flag (and the render gate), so toggling a line never
-    // re-runs this bucketing pipeline.
+    // 为每个 task 构建完整的对齐序列。显隐通过每条 series 的 `show` 标志 (以及渲染门控)
+    // 实现，所以切换某条线不会重跑这套分桶流程。
     if (!data?.records.length || !tasks.length) return null;
     const pointMap = new Map<number, TimedMetricPoint>();
     const sortedRecords = data.records
@@ -127,10 +125,9 @@ export function PingChart({
       : detectTypicalIntervalSeconds(sortedRecords.map(({ time }) => time), 60);
     const tolerance = Math.min(6, Math.max(0.8, fallbackInterval * 0.25));
 
-    // Records are time-sorted and anchors are always more than `tolerance` apart
-    // (a new anchor is only created when no existing one is within tolerance), so
-    // at most one anchor can match a record and it is always the most recent one.
-    // That makes this an O(n) merge instead of the previous O(records × anchors).
+    // records 已按时间排序，且 anchor 之间间距总是大于 `tolerance` (只有当现有 anchor 都不
+    // 在容差内才会新建)，所以一条 record 至多匹配一个 anchor，且必为最近的那个。这样就是 O(n)
+    // 合并，而非原来的 O(records × anchors)。
     let lastAnchor = Number.NEGATIVE_INFINITY;
     for (const { record, time } of sortedRecords) {
       if (!taskKeySet.has(String(record.task_id))) continue;
@@ -155,9 +152,8 @@ export function PingChart({
       matchToleranceRatio: 0.25,
     });
     const times = chartPoints.map((point) => point.time);
-    // Keep undefined (off-phase anchor) distinct from null (real loss/gap): uPlot
-    // spans the former and breaks at the latter. Coalescing to null here is exactly
-    // what used to shred multi-task lines into nothing.
+    // 让 undefined (off-phase anchor) 和 null (真实丢包/断点) 保持区分：uPlot 会跨过前者、
+    // 在后者断开。这里若合并成 null，正是当初把多 task 线条切碎成空的原因。
     const perTask = taskKeys.map((taskKey) =>
       chartPoints.map((point) => point[taskKey]),
     );
@@ -171,8 +167,8 @@ export function PingChart({
 
   const yRange = useMemo<[number | null, number | null]>(() => {
     if (!chart) return [null, null];
-    // Single-pass min/max — avoids allocating a flattened values array and the
-    // `Math.min(...values)` spread, which can throw RangeError on large series.
+    // 单次遍历求 min/max——避免分配扁平化的值数组，也避免 `Math.min(...values)` 展开
+    // (大数组会抛 RangeError)。
     let min = Number.POSITIVE_INFINITY;
     let max = Number.NEGATIVE_INFINITY;
     for (let index = 0; index < tasks.length; index += 1) {
@@ -195,12 +191,9 @@ export function PingChart({
     return [Math.max(0, min - pad), max + pad];
   }, [chart, tasks, visibleTaskIds]);
 
-  // Everything except width/height. uplot-react strips width/height and, when
-  // only those differ between renders, calls u.setSize() instead of recreating
-  // the chart. Keeping the rest of the options referentially stable across a
-  // resize therefore turns a drag-resize into cheap setSize calls rather than a
-  // full teardown/rebuild. (Visibility/range changes still rebuild — that's rare
-  // and on-click.)
+  // 除 width/height 外的全部配置。uplot-react 会剥掉 width/height，当两次渲染只有它们不同时
+  // 调 u.setSize() 而非重建 chart。让其余配置在 resize 间保持引用稳定，拖拽改尺寸就只是廉价的
+  // setSize 调用而非整体拆建。(显隐/范围变化仍会重建——那种情况少且是点击触发。)
   const baseOptions = useMemo<Omit<uPlot.Options, "width" | "height"> | null>(() => {
     if (!chart) return null;
     const { grid, text } = getAxisColors(isDark);
@@ -293,8 +286,7 @@ export function PingChart({
       const max = positives.length ? positives[positives.length - 1] : null;
       const p50 = percentileFromSorted(positives, 0.5);
       const p99 = percentileFromSorted(positives, 0.99);
-      // positives are all > 0, so a non-null p50 is always > 0 — the old `p50 > 0`
-      // sub-check was redundant.
+      // positives 全部 > 0，所以非 null 的 p50 必然 > 0——旧的 `p50 > 0` 子判断是多余的。
       const volatility = p50 && p99 ? p99 / p50 : null;
       const total = records.length;
       const lost = records.filter((record) => record.value <= 0).length;
@@ -330,7 +322,7 @@ export function PingChart({
   };
 
   if (isLoading) {
-    return <section className="instance-panel h-[260px] animate-pulse" aria-busy />;
+    return <InstanceChartLoading title="Ping 图表" />;
   }
 
   if (!data?.records.length) {
@@ -428,7 +420,15 @@ export function PingChart({
       <div ref={chartSizeRef} className="instance-uplot-wrap is-large">
         {chart && options && visibleTasks.length > 0 ? (
           <>
-            <UplotReact options={options} data={chart} resetScales={false} />
+            <UplotReact
+              // 把 cutPeak/connectNulls 纳入 key:这两个 toggle 改了数据与 y 轴 range,
+              // 复用同一 uPlot 实例(resetScales=false)时会卡成空白且关掉也不恢复;
+              // 改变 key 强制重建一个干净实例,开关都能正确重绘。
+              key={`${uuid}-${hours}-${cutPeak ? "smooth" : "raw"}-${connectNulls ? "span" : "gap"}`}
+              options={options}
+              data={chart}
+              resetScales={false}
+            />
             {tooltip.show && (
               <div
                 className="instance-chart-tooltip"

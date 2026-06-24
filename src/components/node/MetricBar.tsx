@@ -42,8 +42,8 @@ export function MetricBar({
   const paintFrom = paint.kind === "gradient" ? paint.from : "";
   const paintTo = paint.kind === "gradient" ? paint.to : "";
 
-  // Stable across renders unless the fill level or paint actually changes, so
-  // the CanvasStrip redraw effect doesn't fire on every parent metrics tick.
+  // 除非填充比例或配色真正变化,否则跨渲染保持稳定,这样 CanvasStrip 的重绘 effect
+  // 不会在父组件每个 metrics tick 都触发。
   const draw = useCallback(
     (ctx: CanvasRenderingContext2D, width: number, height: number) => {
       const inactiveColor = safeCanvasColor("var(--progress-bg)");

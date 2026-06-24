@@ -33,17 +33,15 @@ export function Instance() {
   );
   const showPingChart = themeSettings.isReady && themeSettings.showPingChart;
 
-  // Stable identity: only reads a ref, so [] deps are safe. Passed as onNodeReady
-  // into InstanceDetails' effect — an unstable identity there made every parent
-  // re-render cancel the pending rAF without re-scheduling it, dropping the
-  // one-shot scroll-into-view.
+  // 身份稳定:只读 ref,所以空依赖是安全的。它作为 onNodeReady 传给
+  // InstanceDetails 的 effect;若身份不稳定,父组件每次重渲染都会取消挂起的 rAF
+  // 又不重新调度,导致这次性的 scroll-into-view 丢失。
   const alignCharts = useCallback(() => {
     const frame = window.requestAnimationFrame(() => {
       const element = chartControlsRef.current;
       if (!element) return;
-      // Only pull the chart controls into view when they're off-screen. Avoids
-      // yanking the viewport on every mount/onNodeReady when the user is already
-      // looking at (or has scrolled to) this region.
+      // 只在图表控件不在视口内时才滚动过去,避免用户已经看着这块区域时,
+      // 每次 mount/onNodeReady 都把视口猛地拽走。
       const rect = element.getBoundingClientRect();
       if (rect.top >= 0 && rect.top < window.innerHeight) return;
       element.scrollIntoView({ behavior: "auto", block: "start" });

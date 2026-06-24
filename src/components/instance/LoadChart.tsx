@@ -4,7 +4,7 @@ import type uPlot from "uplot";
 import { ArrowDown, ArrowUp, Cpu, Gauge, HardDrive, MemoryStick, Network, Workflow } from "lucide-react";
 import { useLoadRecords } from "@/hooks/useRecords";
 import { useNodeMetrics } from "@/hooks/useNode";
-import { InstancePanel } from "./InstancePanel";
+import { InstancePanel, InstanceChartLoading } from "./InstancePanel";
 import {
   buildChartTooltipHooks,
   CHART_PALETTE,
@@ -154,10 +154,9 @@ function formatCountAxisValue(value: number, min: number, max: number) {
   return `${Math.round(value)}`;
 }
 
-// Size-independent options. Width/height are added by the caller in a separate
-// memo so a resize only changes those keys — uplot-react then calls setSize()
-// instead of recreating the chart. (Plain function, not a hook — it calls no
-// hooks; the previous `use` prefix tripped the rules-of-hooks lint.)
+// 不含尺寸的配置。width/height 由调用方在另一个 memo 里加上，resize 时只改这两个 key，
+// uplot-react 就会调 setSize() 而不是重建整个 chart。(用普通函数而非 hook——它不调任何
+// hook；之前的 `use` 前缀会触发 rules-of-hooks lint。)
 function buildBaseOptions({
   title,
   keys,
@@ -239,6 +238,7 @@ const ChartCard = memo(function ChartCard({
   title,
   value,
   note,
+  uuid,
   points,
   keys,
   colors,
@@ -255,6 +255,7 @@ const ChartCard = memo(function ChartCard({
   title: string;
   value: ReactNode;
   note?: ReactNode;
+  uuid: string;
   points: ChartPoint[];
   keys: string[];
   colors: string[];
@@ -295,8 +296,7 @@ const ChartCard = memo(function ChartCard({
     [axisKind, axisSize, colors, keys, rangeHours, resolvedAppearance, spanGaps, title, unit],
   );
 
-  // Size-independent enhanced options (base + interaction hooks). Stable across
-  // resizes so only width/height change on the final object below.
+  // 不含尺寸的增强配置 (base + 交互 hook)。resize 时保持稳定，最终对象上只有 width/height 变。
   const enhancedOptions = useMemo<Omit<uPlot.Options, "width" | "height">>(() => {
     const tooltip = buildChartTooltipHooks({
       dataRef,
@@ -324,8 +324,7 @@ const ChartCard = memo(function ChartCard({
     };
   }, [colors, keys, baseOptions, rangeHours, unit]);
 
-  // Only this memo changes on resize, so uplot-react performs a setSize() rather
-  // than a full teardown/rebuild of the chart.
+  // resize 时只有这个 memo 变，uplot-react 走 setSize() 而非整个 chart 的拆建重建。
   const chartOptions = useMemo<uPlot.Options>(
     () => ({ ...enhancedOptions, width, height }) as uPlot.Options,
     [enhancedOptions, width, height],
@@ -347,7 +346,12 @@ const ChartCard = memo(function ChartCard({
         </div>
       </header>
       <div className="instance-uplot-wrap">
-        <UplotReact options={chartOptions} data={data} resetScales={false} />
+        <UplotReact
+          key={`${uuid}-${rangeHours}`}
+          options={chartOptions}
+          data={data}
+          resetScales={false}
+        />
         {tooltip.show && (
           <div
             className="instance-chart-tooltip"
@@ -421,9 +425,8 @@ export function LoadChart({
       .sort((a, b) => a.time - b.time);
     const sampled = downsamplePoints(rawPoints, getHistoryRenderLimit(hours));
     const filled = fillMissingMetricPoints(sampled);
-    // The shared helpers now type missing cells as `number | null | undefined` (the
-    // ping path needs undefined to mark off-phase columns). LoadChart only ever
-    // null-fills, so its points carry no undefined at runtime — narrow back here.
+    // 共享 helper 现在把缺失格子标成 `number | null | undefined` (ping 路径需要 undefined
+    // 标记 off-phase 列)。LoadChart 只用 null 填充，运行时不会出现 undefined——这里收窄回来。
     return interpolateMetricGaps(filled, LOAD_INTERPOLATE_KEYS) as ChartPoint[];
   }, [data, hours]);
 
@@ -453,7 +456,7 @@ export function LoadChart({
     : "—";
 
   if (isLoading) {
-    return <section className="instance-panel h-[260px] animate-pulse" aria-busy />;
+    return <InstanceChartLoading title="负载图表" />;
   }
 
   if (!points.length) {
@@ -500,6 +503,7 @@ export function LoadChart({
         <ChartCard
           icon={<Cpu size={13} />}
           title="CPU"
+          uuid={uuid}
           value={
             isRealtime && node
               ? `${node.cpuPct.toFixed(2)}%`
@@ -520,6 +524,7 @@ export function LoadChart({
         <ChartCard
           icon={<MemoryStick size={13} />}
           title="内存"
+          uuid={uuid}
           value={
             isRealtime && node
               ? `${formatBytes(node.ramUsed)} / ${formatBytes(node.ramTotal)}`
@@ -550,6 +555,7 @@ export function LoadChart({
         <ChartCard
           icon={<HardDrive size={13} />}
           title="磁盘"
+          uuid={uuid}
           value={
             isRealtime && node
               ? `${formatBytes(node.diskUsed)} / ${formatBytes(node.diskTotal)}`
@@ -572,6 +578,7 @@ export function LoadChart({
         <ChartCard
           icon={<Network size={13} />}
           title="网络"
+          uuid={uuid}
           value={
             isRealtime && node
               ? `${formatTrafficRateLabel(node.netDown)} / ${formatTrafficRateLabel(node.netUp)}`
@@ -599,6 +606,7 @@ export function LoadChart({
         <ChartCard
           icon={<Workflow size={13} />}
           title="连接数"
+          uuid={uuid}
           value={
             isRealtime && node
               ? `TCP ${node.connectionsTcp} / UDP ${node.connectionsUdp}`
@@ -620,6 +628,7 @@ export function LoadChart({
         <ChartCard
           icon={<Gauge size={13} />}
           title="进程"
+          uuid={uuid}
           value={
             isRealtime && node
               ? node.process.toString()

@@ -142,7 +142,7 @@ describe("buildBackgroundCache", () => {
     expect(cache).not.toBeNull();
     expect(cache?.lightDesktop).toBe('url("/light.webp")');
     expect(cache?.darkDesktop).toBe('url("/dark.webp")');
-    // Mobile falls back to desktop when unset.
+    // 没设置移动端图时回退到桌面端
     expect(cache?.darkMobile).toBe('url("/dark.webp")');
   });
 

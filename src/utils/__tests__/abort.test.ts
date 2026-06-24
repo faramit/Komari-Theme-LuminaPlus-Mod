@@ -14,8 +14,7 @@ describe("fetchWithTimeout", () => {
 
     await fetchWithTimeout("/x", undefined, 10_000);
 
-    // The regression we guard: the timeout timer must not outlive the settled
-    // request (it used to linger for the full timeout).
+    // 防回归:请求结束后超时定时器不能再存活(以前会一直挂到超时为止)
     expect(vi.getTimerCount()).toBe(0);
   });
 

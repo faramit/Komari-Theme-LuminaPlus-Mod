@@ -1,18 +1,15 @@
-// Shared, non-visual bits between NodeCard and CompactNodeCard. The two cards
-// deliberately use different class names / layout, so their markup is NOT shared
-// — only logic and copy that would otherwise drift if edited in one place.
+// NodeCard 和 CompactNodeCard 之间共享的非视觉逻辑。两张卡刻意用不同的 class
+// 名和布局,所以 markup 不共享——只共享逻辑和文案,否则改一处另一处会漂移。
 
-/** Full tag-list tooltip for a card's chip row (both card layouts share the copy). */
+/** 卡片标签行的完整 tag 列表 tooltip(两种卡片布局共用同一文案)。 */
 export function joinTagTitle(tags: { label: string }[]) {
   return tags.map((tag) => tag.label).join(" / ");
 }
 
 /**
- * Empty-state copy for a card's homepage-ping section. A node bound to a homepage
- * Ping task but with no successful samples yet reads "无样本" (no samples); an
- * unbound node reads "未配置" (unconfigured). Shared so NodeCard and
- * CompactNodeCard can't drift on the wording. `title` is the longer header form
- * (NodeCard only); `text` is the inline placeholder both cards use.
+ * 卡片首页 ping 区块的空状态文案。绑定了首页 Ping 任务但还没有成功样本的节点显示
+ * "无样本";未绑定的节点显示"未配置"。共享以防 NodeCard 和 CompactNodeCard 措辞
+ * 漂移。`title` 是较长的标题形式(仅 NodeCard 用);`text` 是两张卡都用的内联占位符。
  */
 export function pingEmptyLabels(hasHomepagePingBinding: boolean): { title: string; text: string } {
   return hasHomepagePingBinding
@@ -20,7 +17,7 @@ export function pingEmptyLabels(hasHomepagePingBinding: boolean): { title: strin
     : { title: "未配置首页 Ping", text: "未配置" };
 }
 
-/** Title + aria-label for the "view instance details" link in a node card header. */
+/** 节点卡片头部"查看实例详情"链接的 title 和 aria-label。 */
 export function nodeDetailLinkLabels(name: string, osName: string) {
   return {
     title: `${osName} · 查看详情`,
@@ -28,18 +25,17 @@ export function nodeDetailLinkLabels(name: string, osName: string) {
   };
 }
 
-// Bar-strip geometry/hit-test shared by MiniBars (latency) and QualityBars
-// (loss). Both render a fixed-count canvas bar row, so the slot math and bar
-// width/gap must stay identical between them.
+// MiniBars(延迟)和 QualityBars(丢包)共享的柱状条几何/命中检测。两者都渲染
+// 定数量的 canvas 柱子行,所以 slot 计算和柱宽/间距必须保持一致。
 
-/** Slot index (0..count-1) under a pointer offset, or null when there are no bars. */
+/** 指针 offset 落在哪个 slot(0..count-1),没有柱子时返回 null。 */
 export function getBarSlot(offsetX: number, width: number, count: number): number | null {
   if (count === 0 || width <= 0) return null;
   const slotWidth = width / count;
   return Math.max(0, Math.min(count - 1, Math.floor(offsetX / slotWidth)));
 }
 
-/** Per-bar width and inter-bar gap for a `count`-bar strip spanning `width` px. */
+/** 跨 `width` px、含 `count` 根柱子的条形,每根柱宽和柱间间距。 */
 export function getBarGeometry(width: number, count: number): { gap: number; barWidth: number } {
   const gap = count > 48 ? 1 : 2;
   const barWidth = Math.max(1, (width - gap * (count - 1)) / Math.max(1, count));

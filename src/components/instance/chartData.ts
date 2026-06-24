@@ -1,20 +1,16 @@
 export type TimedMetricPoint = {
   time: number;
-  // null = a real break (packet loss or a detected outage) — cuts the line.
-  // undefined = this task simply has no sample at this aligned anchor (another
-  // task created it) — must be spanned, not treated as a break. Keeping the two
-  // distinct is what lets uPlot draw continuous lines across off-phase columns
-  // while still breaking at genuine gaps.
+  // null = 真实断点 (丢包或检测到的中断)——切断线条。
+  // undefined = 该 task 在这个对齐 anchor 上根本没有采样 (anchor 是另一个 task 建的)——
+  // 须跨过、不当作断点。区分这两者，uPlot 才能跨越 off-phase 列画连续线，同时在真实空缺处断开。
   [key: string]: number | null | undefined;
 };
 
-// Upper bound on gap-marker (null) points inserted per detected gap, so a long
-// outage can't inflate the aligned arrays into thousands of points.
+// 每个检测到的 gap 最多插入的 null 标记点数上限，避免长时间中断把对齐数组撑成上千个点。
 const MAX_SENTINELS_PER_GAP = 6;
 
-// Index of a time within `tolerance` of `target` (binary search over ascending
-// `times`), or -1 if none. Used to merge a break-null onto an existing other-task
-// anchor instead of spawning a near-duplicate column.
+// 在升序 `times` 上二分查找与 `target` 相差在 `tolerance` 内的下标，没有则返回 -1。
+// 用于把断点 null 合并到已有的他 task anchor 上，而不是新建一个近重复列。
 function findPointNearTime(times: number[], target: number, tolerance: number) {
   let low = 0;
   let high = times.length - 1;
@@ -45,12 +41,10 @@ function median(values: number[]) {
   return sorted[mid];
 }
 
-// `spanMissing` decides what an absent task key becomes. false (default) fills with
-// `null` — treats a missing sample as a real break, correct for single-series fills
-// like LoadChart's fillMissingMetricPoints. true fills with `undefined` so off-phase
-// anchors (columns another task created) stay spannable instead of cutting every
-// line. (A boolean, not a fill value, because passing `undefined` to a defaulted
-// param would just re-trigger the default.)
+// `spanMissing` 决定缺失的 task key 填成什么。false (默认) 填 `null`——把缺采样当真实断点，
+// 适用于 LoadChart 的 fillMissingMetricPoints 这类单序列填充。true 填 `undefined`，让 off-phase
+// anchor (另一个 task 建的列) 保持可跨越而非切断每条线。(用布尔而非填充值，因为给有默认值的参数
+// 传 `undefined` 只会再次触发默认值。)
 function normalizePoints(points: TimedMetricPoint[], spanMissing = false) {
   if (points.length === 0) {
     return { points: [] as TimedMetricPoint[], keys: [] as string[] };
@@ -69,8 +63,8 @@ function normalizePoints(points: TimedMetricPoint[], spanMissing = false) {
   const base = Object.fromEntries(keys.map((key) => [key, fillValue] as const));
   const deduped = new Map<number, TimedMetricPoint>();
 
-  // Merge (not overwrite) points sharing a timestamp so a per-task sentinel null
-  // landing on an existing anchor can't drop that anchor's other-task values.
+  // 对同一时间戳的点做合并 (而非覆盖)，这样落在已有 anchor 上的某 task 哨兵 null
+  // 不会丢掉该 anchor 上其他 task 的值。
   for (const point of [...points].sort((a, b) => a.time - b.time)) {
     const prev = deduped.get(point.time);
     deduped.set(point.time, prev ? { ...prev, ...point } : { ...base, ...point });
@@ -134,9 +128,8 @@ export function fillMissingMetricPoints(
         ? sortedPoints[pointer]
         : null;
 
-    // Snap interior samples onto the grid time, but keep the newest sample's own
-    // timestamp — otherwise an off-grid final point gets pulled up to half an
-    // interval earlier, shifting the chart's right edge and coverage label.
+    // 内部采样吸附到网格时间，但保留最新采样自己的时间戳——否则不在网格上的末点会被前移
+    // 半个 interval，导致图表右边缘和覆盖范围标签都偏移。
     const isLastSample = matched === sortedPoints[sortedPoints.length - 1];
     filled.push(
       matched
@@ -187,20 +180,17 @@ export function insertMetricGapSentinels(
     if (!Number.isFinite(interval) || interval <= 0) continue;
 
     const tolerance = Math.max(1, interval * toleranceRatio);
-    // Only treat a hole as a real break once it exceeds ~2 sample intervals, so a
-    // single jittered/missed ping doesn't shred the line; smaller holes are left
-    // for uPlot to span as off-phase (undefined) columns.
+    // 只有空缺超过约 2 个采样 interval 才当真实断点，免得单次抖动/漏发的 ping 把线切碎；
+    // 更小的空缺交给 uPlot 当 off-phase (undefined) 列跨过。
     const breakThreshold = interval * 2;
     for (let index = 1; index < validTimes.length; index += 1) {
       const previous = validTimes[index - 1];
       const current = validTimes[index];
       if (current - previous <= breakThreshold) continue;
 
-      // One null is enough to break the line. Mark THIS task broken inside the gap:
-      // if another task already has an anchor here, set the null on it (no
-      // near-duplicate column); otherwise add a per-task sentinel — merged, never
-      // overwritten, so simultaneous outages on multiple tasks all survive. Capped
-      // per gap so a long outage can't balloon the point count.
+      // 一个 null 就足以断线。把当前 task 在 gap 内标为断开：若此处已有别的 task 的 anchor，
+      // 就把 null 设到它上面 (不新建近重复列)；否则加一个本 task 的哨兵——合并而非覆盖，这样多个
+      // task 同时中断也都能保留。每个 gap 有上限，避免长时间中断把点数撑爆。
       let added = 0;
       for (
         let expected = previous + interval;
@@ -305,9 +295,8 @@ export function cutPeakValues<T extends { [key: string]: any }>(
   const halfWindow = Math.floor(windowSize / 2);
 
   for (const key of keys) {
-    // Remember which points had no value to begin with (packet loss / gaps).
-    // The EWMA pass below must NOT backfill these — only the spikes it removes —
-    // otherwise a loss gap renders as fabricated latency.
+    // 记下哪些点本来就没值 (丢包/空缺)。下面的 EWMA 过程绝不能回填这些点——只能补它自己
+    // 移除的尖峰——否则丢包空缺会被渲染成假的延迟。
     const originallyMissing = new Set<number>();
     for (let index = 0; index < result.length; index += 1) {
       const value = result[index][key];
@@ -362,7 +351,7 @@ export function cutPeakValues<T extends { [key: string]: any }>(
           [key]: ewma,
         };
       } else if (ewma != null && !originallyMissing.has(index)) {
-        // Smooth over a spike we just removed, but leave genuine loss gaps null.
+        // 平滑掉刚移除的尖峰，但真实丢包空缺保持 null。
         result[index] = {
           ...result[index],
           [key]: ewma,

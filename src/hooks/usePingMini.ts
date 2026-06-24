@@ -13,9 +13,8 @@ import {
 const DEFAULT_PING_REFRESH_INTERVAL = 60_000;
 const MIN_PING_REFRESH_INTERVAL = 10_000;
 const MAX_PING_REFRESH_INTERVAL = 300_000;
-// Homepage mini charts intentionally stay at 24 frontend aggregation buckets.
-// The homepage cards are for quick trend reading, so we aggregate the latest hour into
-// 24 equal windows instead of showing one raw backend bucket per bar.
+// 首页 mini 图表特意固定为前端聚合的 24 个 bucket。首页卡片是用来快速看趋势的，
+// 所以把最近一小时聚合成 24 等分窗口，而不是每根柱子对应一个后端原始 bucket。
 const MAX_VISIBLE_HOMEPAGE_PING_BUCKETS = 24;
 
 const EMPTY_PING: PingOverviewItem = {
@@ -194,10 +193,9 @@ function buildAssignmentKey(selectedTaskByClient: Map<string, number>) {
     .join("|");
 }
 
-// Hard ceiling for a single overview request. The RPC transport self-limits to
-// ~30s, but the HTTP fallback (`apiGet`) has no timeout — without this guard a
-// hung fallback fetch never settles, so `pingRefreshInFlight` stays true and all
-// future polling is wedged. Racing each request guarantees the chain recovers.
+// 单次 overview 请求的硬上限。RPC 传输自带 ~30s 限制，但 HTTP fallback（`apiGet`）
+// 没有超时——没有这个保护，一旦 fallback fetch 卡死就永远不结束，`pingRefreshInFlight`
+// 会一直为 true，把后续所有轮询都卡死。给每个请求加 race 才能保证整条链路能恢复。
 const PING_REQUEST_TIMEOUT_MS = 35_000;
 
 async function buildOverviewMap(
@@ -310,8 +308,8 @@ function schedulePingRefresh(intervalMs: number) {
     window.clearTimeout(pingRefreshTimer);
     pingRefreshTimer = null;
   }
-  // Stop polling once no component is consuming the overview. The chain restarts
-  // from ensurePingOverviewStarted when a consumer mounts again.
+  // 没有组件消费 overview 时就停止轮询。等有消费者再次挂载时，
+  // 由 ensurePingOverviewStarted 重新启动整条链路。
   if (activeConsumers <= 0) return;
   pingRefreshTimer = window.setTimeout(() => {
     pingRefreshTimer = null;
@@ -324,9 +322,8 @@ function stopPingPolling() {
     window.clearTimeout(pingRefreshTimer);
     pingRefreshTimer = null;
   }
-  // Abort the in-flight refresh (if any) so its requests and bandwidth are
-  // released immediately on teardown; refreshPingOverview treats an aborted
-  // signal as non-current and skips committing/rescheduling.
+  // 中止进行中的 refresh（如果有），让它的请求和带宽在 teardown 时立刻释放；
+  // refreshPingOverview 会把已 abort 的 signal 当成非当前，跳过 commit/重新调度。
   if (pingAbortController) {
     pingAbortController.abort();
     pingAbortController = null;
@@ -341,10 +338,9 @@ function commitPingOverview(
   const prevItems = pingOverviewState.items;
   const nextItems = new Map<string, PingOverviewStoreEntry>();
   const touched = new Set<string>();
-  // Bookkeeping (missingRounds) advanced without a visible change. We must still
-  // persist the new state so the grace counter can eventually expire a vanished
-  // client; otherwise the early-return below discards the increment and the item
-  // is preserved forever.
+  // 记账字段（missingRounds）变了但没有可见变化。仍然必须持久化新状态，
+  // 这样 grace 计数才能最终淘汰掉消失的 client；否则下面的提前 return 会丢掉这次
+  // 自增，该 item 就会被永远保留。
   let bookkeepingChanged = false;
   const keys = new Set<string>([...prevItems.keys(), ...items.keys()]);
   const preserveMissing = pingOverviewState.assignmentKey === assignmentKey;
@@ -418,8 +414,8 @@ async function refreshPingOverview() {
   const controller = new AbortController();
   pingAbortController = controller;
   const { signal } = controller;
-  // True if a still-current request applies (not aborted by stopPingPolling and
-  // the visible/binding assignment hasn't changed underneath us).
+  // 判断当前请求是否仍然有效（没被 stopPingPolling 中止，
+  // 且 visible/binding 分配在执行期间没有被改掉）。
   const isCurrent = () =>
     !signal.aborted &&
     visibleKey === scheduledVisibleKey &&
@@ -448,11 +444,10 @@ async function refreshPingOverview() {
   } finally {
     pingRefreshInFlight = false;
     if (pingAbortController === controller) pingAbortController = null;
-    // Resume whenever consumers still want polling but nothing is queued. This
-    // covers an assignment change mid-flight (the run above skipped its commit)
-    // and the abort/remount race (e.g. StrictMode: mount→stop(abort)→mount),
-    // where the aborted run must not be the one to reschedule. A successful or
-    // failed run already set a timer, so this stays a no-op in the steady state.
+    // 只要消费者还想轮询但队列里没有任务，就恢复轮询。这覆盖了执行中途 assignment
+    // 变化（上面那次跑会跳过 commit）以及 abort/重新挂载竞态（如 StrictMode:
+    // mount→stop(abort)→mount），后者里被 abort 的那次不能负责重新调度。成功或失败
+    // 的一次已经设过 timer，所以稳态下这里是 no-op。
     if (
       activeConsumers > 0 &&
       scheduledVisibleUuids.length > 0 &&
@@ -488,8 +483,8 @@ function ensurePingOverviewStarted(
     return;
   }
 
-  // Restart whenever there is no pending request and no scheduled tick — this
-  // covers both the initial mount and resuming after polling was stopped.
+  // 只要没有待处理请求、也没有已调度的 tick 就重启——这同时覆盖首次挂载
+  // 和轮询被停止后的恢复。
   if (
     normalizedVisibleUuids.length > 0 &&
     !pingRefreshInFlight &&

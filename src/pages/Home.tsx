@@ -77,18 +77,14 @@ export function Home() {
     return <Navigate to="/" replace />;
   }
 
-  // Private-site gate — mirrors the purcarte theme's "go to login" screen,
-  // restyled to ours. The backend whitelists /api/public and /api/me even on a
-  // private site (web/api/Auth.go publicPaths) precisely so the frontend can
-  // detect this state and prompt login, instead of letting every node request
-  // 401 into a blank grid.
+  // 私有站点拦截页。后端把 /api/public、/api/me 加进白名单（web/api/Auth.go
+  // publicPaths），就是为了让前端能识别这个状态并提示登录,而不是让每个节点请求
+  // 都 401 变成空白网格。
   //
-  // We render the grid by default and only swap in the gate once we POSITIVELY
-  // know the site is private AND the visitor resolved as logged-out. This avoids
-  // blocking the common public path on /api/public (no full-page spinner there),
-  // and waiting on authPending means a logged-in visitor on a private site never
-  // sees a gate flash. A transient /api/public failure falls through to the grid
-  // (we can't know it's private), which is the accepted trade-off.
+  // 默认渲染网格,只有明确知道站点私有且访客确实未登录时才换成拦截页:这样常见的
+  // 公开访问不会卡在 /api/public 的整页 spinner 上,而等待 authPending 也保证私有
+  // 站点的已登录访客不会看到拦截页一闪。/api/public 偶发失败会落到网格(无法判定
+  // 私有),这是可接受的取舍。
   if (publicConfig?.private_site === true && !authPending && me?.logged_in !== true) {
     return <PrivateSiteGate />;
   }
@@ -100,11 +96,9 @@ export function Home() {
   );
 }
 
-// Shown on a private site to an anonymous visitor. Login itself is owned by the
-// Komari backend (password / OAuth / 2FA all live at /admin), so we link there in
-// a new tab rather than reimplementing an auth form. useAuth's refetchOnWindowFocus
-// then revalidates when the visitor returns, so this gate clears on its own once
-// they have logged in — no manual refresh needed.
+// 私有站点对匿名访客显示。登录由 Komari 后端负责(密码 / OAuth / 2FA 都在
+// /admin),所以这里新开标签页跳过去,而不是自己重写一套登录表单。访客回来时
+// useAuth 的 refetchOnWindowFocus 会重新校验,登录后拦截页自动消失,无需手动刷新。
 function PrivateSiteGate() {
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">

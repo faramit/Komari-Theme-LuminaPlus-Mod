@@ -46,8 +46,8 @@ export function formatBytes(n: number | undefined | null, decimals = 2): string 
 function formatRateValue(value: number): string {
   if (value >= 100) return Math.round(value).toString();
   if (value >= 10) return trimFixed(value, 1);
-  // Only ever called with bitsPerSec / divisor where bitsPerSec >= divisor, so
-  // value is always >= 1 — no sub-1 branch is reachable.
+  // 只会以 bitsPerSec / divisor 的形式调用,且 bitsPerSec >= divisor,所以 value 恒 >= 1,
+  // 不存在小于 1 的分支。
   return trimFixed(value, 2);
 }
 
@@ -88,9 +88,8 @@ export interface ByteRateDisplay {
   unit: string;
 }
 
-// Byte-based rate (KB/s · MB/s · GB/s · TB/s) — same 1024 ladder as formatBytes,
-// just suffixed with "/s". Used where a transfer speed reads more naturally in
-// bytes than in bits (e.g. home 实时带宽 and node-card speeds) instead of bps/Kbps/Mbps.
+// 按字节算的速率(KB/s · MB/s · GB/s · TB/s)——和 formatBytes 同一套 1024 进制,只是加了 "/s" 后缀。
+// 用在传输速度按字节比按比特更自然的地方(如首页实时带宽和节点卡速度),而不是 bps/Kbps/Mbps。
 export function formatByteRate(bytesPerSec: number | undefined | null): ByteRateDisplay {
   const [value, unit = "B"] = formatBytes(bytesPerSec).split(" ");
   return { value, unit: `${unit}/s` };
@@ -138,13 +137,11 @@ export function formatOfflineDuration(
   return { value: String(days), unit: "天", full: `离线 ${days} 天` };
 }
 
-// Resolve a node's `expired_at` to an absolute ms timestamp, or null when it
-// carries no real expiry. Komari encodes "no expiry" several ways depending on
-// backend/agent version: JSON null (→ "" via our zod transform), the Go zero-time
-// "0001-01-01T00:00:00Z" (parses to year 1, i.e. a ≤0 epoch), or a numeric
-// sentinel 0 / -1. None of these are a real past date — letting Date.parse turn
-// them into year 1/2000/2001 is what made never-expiring nodes render "已过期"
-// and drop out of the cost summary. A bare positive number is a unix timestamp.
+// 把节点的 `expired_at` 解析成绝对毫秒时间戳,没有真实到期时返回 null。Komari 按后端/agent 版本会用
+// 几种方式编码"无到期":JSON null(经我们的 zod 转换变成 "")、Go 零时 "0001-01-01T00:00:00Z"
+// (会被解析成公元 1 年,即 ≤0 的 epoch),或数字哨兵 0 / -1。这些都不是真实的过去日期——任由 Date.parse
+// 把它们变成 1/2000/2001 年,正是让永不过期的节点渲染成"已过期"并从成本汇总里掉出去的原因。裸正数则
+// 当作 unix 时间戳。
 export function resolveExpireTimestamp(
   iso: string | number | null | undefined,
 ): number | null {
@@ -153,11 +150,11 @@ export function resolveExpireTimestamp(
   if (raw === "") return null;
   if (/^-?\d+$/.test(raw)) {
     const n = Number(raw);
-    if (n <= 0) return null; // 0 / -1 "no expiry" sentinels
-    return n < 1e12 ? n * 1000 : n; // unix seconds vs. milliseconds
+    if (n <= 0) return null; // 0 / -1 "无到期" 哨兵值
+    return n < 1e12 ? n * 1000 : n; // unix 秒 vs. 毫秒
   }
   const ts = Date.parse(raw);
-  if (Number.isNaN(ts) || ts <= 0) return null; // unparseable or Go zero-time
+  if (Number.isNaN(ts) || ts <= 0) return null; // 无法解析或 Go 零时
   return ts;
 }
 
@@ -202,7 +199,7 @@ function inferPlainTagColor(label: string): string {
   return "violet";
 }
 
-/** Parse `tag1<color>;tag2<color2>` into [{ label, color }]. */
+/** 把 `tag1<color>;tag2<color2>` 解析成 [{ label, color }]。 */
 export function parseTags(raw: string | undefined | null): Array<{ label: string; color: string }> {
   if (!raw) return [];
   return raw

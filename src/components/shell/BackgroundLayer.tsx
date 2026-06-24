@@ -8,12 +8,9 @@ import {
 } from "@/utils/background";
 
 /**
- * Keeps the site background + surface-transparency CSS variables in sync with
- * the saved theme settings and the current appearance. Renders nothing — the
- * image is painted by the body::before/::after layers from these variables, and
- * the same values are cached so the index.html inline script can apply them on
- * the first frame (no opaque→glass flash on refresh). With no background image
- * configured the cache/vars are cleared and the solid theme is untouched.
+ * 让背景图和表面透明度的 CSS 变量始终跟随主题设置与当前外观。本身不渲染任何东西——背景由
+ * body::before/::after 根据这些变量绘制；同一份值还会缓存下来，让 index.html 的内联脚本能在
+ * 首帧就应用（刷新时不会出现 opaque→glass 闪烁）。没配背景图时清掉缓存和变量，纯色主题保持不动。
  */
 export function BackgroundLayer() {
   const { resolvedAppearance } = usePreferences();

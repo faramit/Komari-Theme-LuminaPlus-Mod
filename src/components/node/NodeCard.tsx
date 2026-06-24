@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { memo, useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
   Cpu,
@@ -12,7 +12,6 @@ import {
   Unplug,
   Calendar,
   RefreshCw,
-  Power,
   CircleDollarSign,
   Database,
   Network,
@@ -22,11 +21,12 @@ import { usePreferences } from "@/hooks/usePreferences";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import {
   formatBytes,
-  formatOfflineDuration,
 } from "@/utils/format";
 import {
   latencyHeatColor,
   lossHeatColor,
+  speedRateColor,
+  trafficQuotaSegmentColor,
 } from "@/utils/metricTone";
 import { Flag } from "@/components/ui/Flag";
 import { OsLogo } from "@/components/ui/OsLogo";
@@ -90,7 +90,6 @@ export const NodeCard = memo(function NodeCard({
     hasHomepagePingBinding,
     isOnline,
     isOffline,
-    offlineSince,
     osName,
   } = model;
   const showConnections = themeSettings.isReady && themeSettings.showConnections;
@@ -110,7 +109,6 @@ export const NodeCard = memo(function NodeCard({
       className={clsx("server-card", isOffline && "is-offline")}
       data-appearance={resolvedAppearance}
     >
-      {isOffline && <OfflineMask offlineSince={offlineSince} />}
 
       <div className="server-card-content">
         <NodeCardHeader node={node} subtitle={subtitle} osName={osName} />
@@ -179,33 +177,6 @@ export const NodeCard = memo(function NodeCard({
     </article>
   );
 });
-
-function OfflineMask({ offlineSince }: { offlineSince: number }) {
-  // This component only mounts for offline cards, so the interval runs solely
-  // for them. Re-rendering every 30s keeps the "离线 N 分钟" badge advancing even
-  // though the node's metrics (and the card model memo) have stopped updating.
-  const [, forceTick] = useState(0);
-  useEffect(() => {
-    const id = window.setInterval(() => forceTick((value) => value + 1), 30_000);
-    return () => window.clearInterval(id);
-  }, []);
-
-  const offlineFor = formatOfflineDuration(offlineSince);
-  return (
-    <div className="offline-mask">
-      <span className="offline-badge" title={offlineFor.full}>
-        <Power size={14} strokeWidth={2.2} />
-        <span className="offline-badge-copy">
-          <span>离线</span>
-          <span className="offline-badge-time">
-            {offlineFor.value}
-            {offlineFor.unit ? ` ${offlineFor.unit}` : ""}
-          </span>
-        </span>
-      </span>
-    </div>
-  );
-}
 
 function NodeCardHeader({
   node,
@@ -350,18 +321,16 @@ function NodeTrafficSection({
   );
 }
 
-// Mandatory traffic-quota row: label + remaining inline (remaining kept in a
-// neutral theme color so it doesn't shout), used / limit on the same line (muted),
-// and a CSS segmented fill (no canvas) heat-colored by the used fraction.
+const TRAFFIC_QUOTA_SEGMENTS = 18;
+
+// 流量阈值行:label + 剩余量(剩余量用中性色,不抢眼)、同行的 used / limit(弱化),
+// 下面是 18 个独立 segment。每个 segment 按它的绝对位置上色(绿→黄→红,见
+// trafficQuotaSegmentColor),只要 used fraction 到达就点亮,否则用中性轨道色 ——
+// 于是点亮区段呈现整条渐变,前沿就能看出离用满还有多远。
 function NodeTrafficQuota({ traffic }: { traffic: TrafficDisplay }) {
-  const style = {
-    "--traffic-quota-color": traffic.color,
-    "--traffic-quota-fill": `${Math.round(traffic.fraction * 100)}%`,
-  } as CSSProperties;
   return (
     <div
       className="card-metric-section traffic-quota"
-      style={style}
       title={`流量阈值 · ${traffic.typeLabel}`}
     >
       <div className="traffic-quota-head">
@@ -372,15 +341,26 @@ function NodeTrafficQuota({ traffic }: { traffic: TrafficDisplay }) {
         </span>
         <span className="traffic-quota-usage">{traffic.detail}</span>
       </div>
-      <div className="traffic-quota-track" aria-hidden />
+      <div className="traffic-quota-track" aria-hidden>
+        {Array.from({ length: TRAFFIC_QUOTA_SEGMENTS }, (_, i) => {
+          const pos = (i + 0.5) / TRAFFIC_QUOTA_SEGMENTS;
+          const lit = pos <= traffic.fraction;
+          return (
+            <span
+              key={i}
+              className="traffic-quota-segment"
+              style={{ background: lit ? trafficQuotaSegmentColor(pos) : "var(--progress-bg)" }}
+            />
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-// Memoized: across the ~1s metrics ticks that re-render the parent card, every
-// prop here is reference-stable — ping data refreshes ~every 60s, the hover
-// state only moves on pointer interaction, and the onHover props are stable
-// setState identities — so the latency/loss bars subtree skips per-tick work.
+// memo:父卡片每 ~1s 指标 tick 重渲染时,这里每个 prop 都是引用稳定的 —— ping 数据
+// ~60s 才刷新一次,hover 状态只在指针交互时变,onHover 是稳定的 setState 引用 ——
+// 所以 latency/loss 柱子这棵子树能跳过每个 tick 的工作。
 const NodeHealthSection = memo(function NodeHealthSection({
   ping,
   pingBuckets,
@@ -503,11 +483,9 @@ const NodeHealthSection = memo(function NodeHealthSection({
   );
 });
 
-// Shared by the visible footer row and the off-screen measurement row so a style
-// tweak can't drift between the two. No own `title`: the visible row carries the
-// full tag list as its title, and a chip without a title lets the hover fall
-// through to it, so hovering any chip reveals every tag (incl. ones the fit pass
-// dropped) instead of just that chip's label.
+// 可见 footer 行和屏外测量行共用,免得改样式时两边走样。本身不带 title:可见行的
+// title 已经挂了完整 tag 列表,chip 不带 title 时 hover 会穿透到那一行,于是 hover
+// 任意 chip 都能看到全部 tag(包括 fit 阶段被丢掉的),而不只是这个 chip 的 label。
 function FooterTagChip({ tag }: { tag: DisplayTag }) {
   return (
     <span
@@ -549,9 +527,8 @@ function NodeCardFooter({
   const measureRef = useRef<HTMLDivElement>(null);
   const [visibleTagCount, setVisibleTagCount] = useState(footerTags.length);
   const visibleTags = footerTags.slice(0, visibleTagCount);
-  // Full tag list lives in the row's tooltip; the chips carry no title of their
-  // own so hovering any chip falls through to it — that's how tags dropped by the
-  // fit pass stay discoverable, without a visible "+N" badge.
+  // 完整 tag 列表挂在这一行的 tooltip 上;chip 不带自己的 title,hover 会穿透到行上 ——
+  // fit 阶段丢掉的 tag 就靠这个保持可见,不用显示"+N"角标。
   const tagTitle = joinTagTitle(footerTags);
 
   useLayoutEffect(() => {
@@ -559,8 +536,7 @@ function NodeCardFooter({
     const measure = measureRef.current;
     if (!row || !measure) return;
 
-    // The inter-chip gap is a constant CSS token, so read it once per effect run
-    // instead of on every resize tick.
+    // chip 间距是个固定的 CSS token,每次 effect 跑读一次就够,不必每个 resize tick 都读。
     const styles = window.getComputedStyle(measure);
     const gap = Number.parseFloat(styles.columnGap || styles.gap || "0") || 0;
 
@@ -580,8 +556,7 @@ function NodeCardFooter({
         nextVisibleCount += 1;
       }
 
-      // Never collapse to an empty row: if even the first tag is wider than the
-      // space left after the price chip, still show it and let CSS ellipsis it.
+      // 绝不塌成空行:就算第一个 tag 比价格 chip 之后剩的空间还宽,也照样显示,交给 CSS 省略号截断。
       if (nextVisibleCount === 0 && tagWidths.length > 0) nextVisibleCount = 1;
 
       setVisibleTagCount((current) =>
@@ -599,8 +574,8 @@ function NodeCardFooter({
     } else {
       window.addEventListener("resize", updateVisibleTags);
     }
-    // Font swap can change tag widths after first paint; re-measure once ready,
-    // but bail if the card unmounted before the promise resolved.
+    // 字体替换会在首次绘制后改变 tag 宽度;字体就绪后重新测量一次,
+    // 但若卡片在 promise resolve 前已卸载则跳过。
     document.fonts?.ready.then(() => {
       if (!cancelled) updateVisibleTags();
     });
@@ -673,25 +648,27 @@ function TrafficStat({
   color: string;
   icon: ReactNode;
 }) {
+  // 按当前速率单位档取热力色:文字/圆点/实时点都随速度量级变色,图标仍用方向色(color)区分上下行。
+  const speedColor = speedRateColor(rate.unit);
   return (
     <div className="traffic-stat">
       <div className="traffic-stat-head">
-        <div className="traffic-stat-label" style={{ color }}>
-          {icon}
-          <span>{direction}</span>
+        <div className="traffic-stat-label">
+          <span style={{ color }}>{icon}</span>
+          <span style={{ color: speedColor }}>{direction}</span>
         </div>
-        <span className="traffic-stat-value tabular" style={{ color }}>
+        <span className="traffic-stat-value tabular" style={{ color: speedColor }}>
           {rate.value}
           <span className="traffic-stat-unit">{rate.unit}</span>
         </span>
       </div>
       <div className="traffic-stat-trend" aria-hidden>
-        <TrafficDotStrip samples={samples} color={color} redrawKey={redrawKey} />
+        <TrafficDotStrip samples={samples} color={speedColor} redrawKey={redrawKey} />
         <span className="traffic-stat-live" data-live={live ? "true" : "false"}>
           <span
             className="traffic-stat-live-dot"
             style={{
-              background: color,
+              background: speedColor,
             }}
           />
           <span>{live ? (active ? "实时" : "空闲") : "离线"}</span>
@@ -717,15 +694,15 @@ function TrafficDotStrip({
   color: string;
   redrawKey: string;
 }) {
-  // Stable unless the traffic samples (a cached store snapshot) or color change,
-  // so the canvas only redraws when the trend actually moves.
+  // 除非 traffic samples(缓存的 store 快照)或 color 变了,否则保持稳定,
+  // 这样 canvas 只在趋势真的变动时才重绘。
   const draw = useCallback(
     (ctx: CanvasRenderingContext2D, width: number, height: number) => {
       if (samples.length === 0) return;
       const slotWidth = width / samples.length;
-      // Normalize once: safeCanvasColor resolves var() and converts hsl()→rgb(), so
-      // baseColor/inactiveColor are canvas-safe and mixSrgbTowardWhite's hex output
-      // is too — no per-dot color normalization needed inside the loop below.
+      // 一次性归一化:safeCanvasColor 解析 var() 并把 hsl() 转成 rgb(),所以
+      // baseColor/inactiveColor 对 canvas 安全,mixSrgbTowardWhite 的 hex 输出也是 ——
+      // 下面循环里不需要再逐点归一化颜色。
       const baseColor = safeCanvasColor(color);
       const inactiveColor = safeCanvasColor("var(--progress-bg)");
 
@@ -733,7 +710,7 @@ function TrafficDotStrip({
         const hasTraffic = sample.value > 0;
         const scale = hasTraffic ? 0.72 + sample.level * 0.82 : 0.46;
         const radius = 2 * scale;
-        // JS sRGB mix (not a canvas `color-mix()` string, which old WebKit rejects).
+        // 用 JS 做 sRGB 混色(不用 canvas 的 color-mix() 字符串,老 WebKit 不认)。
         const tone = hasTraffic
           ? mixSrgbTowardWhite(baseColor, (68 + sample.level * 20) / 100)
           : inactiveColor;

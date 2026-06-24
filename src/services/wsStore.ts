@@ -48,9 +48,8 @@ interface NodeTrafficTrend {
 
 const LIVE_STATUS_REFRESH_INTERVAL_MS = 2_000;
 const NODE_INFO_REFRESH_INTERVAL_MS = 30_000;
-// The live poll fires every 2s; cap a single request well below the RPC's 30s
-// default so a half-open socket fails fast (surfacing failureStreak and letting
-// the next tick retry) instead of freezing live updates for up to a minute.
+// 实时轮询每 2s 一次;单次请求超时设得远低于 RPC 默认的 30s,这样 half-open socket 能
+// 快速失败(暴露 failureStreak 并让下一 tick 重试),而不是冻结实时更新长达一分钟。
 const LIVE_STATUS_REQUEST_TIMEOUT_MS = 8_000;
 const SCROLL_IDLE_DELAY_MS = 160;
 const TRAFFIC_TREND_SAMPLE_COUNT = 18;
@@ -136,19 +135,14 @@ function alignEmptyMetricsTotals(metrics: NodeMetrics, info: NodeInfo): NodeMetr
   };
 }
 
-// Surface one direction of a node's cumulative traffic counter (net_total_up/down)
-// straight from the backend — including a *decrease* when the counter legitimately
-// resets (agent reinstall, billing-cycle rollover), so the overview total and the
-// per-node traffic-limit bars stay aligned with the backend instead of drifting
-// above it. The single guard: a frame that omits the totals normalizes to 0, so we
-// treat 0 as "no sample this tick" and hold the previous value rather than letting
-// a partial realtime frame flicker the total down to zero.
+// 直接透传节点累计流量计数(net_total_up/down)的某一方向 —— 包括计数器合理重置时的*下降*
+//(agent 重装、计费周期翻转),让概览总量和每节点流量限额条始终对齐后端,而不是越飘越高。
+// 唯一的保护:缺失总量的帧会被 normalize 成 0,所以把 0 当作"本 tick 无采样",保持上一个值,
+// 避免局部实时帧把总量闪烁到 0。
 //
-// This intentionally replaces an earlier offset-based scheme that carried the prior
-// total across every reset to stay monotonic. That scheme quietly inflated the
-// displayed total on each offline→online flap (each flap re-added the node's whole
-// total), so over a session it climbed far above the backend — the value snapped
-// back down on a hard refresh and then climbed again. Exported for unit testing.
+// 这里有意替换掉之前基于 offset、为保持单调而在每次重置时携带旧总量的方案。那个方案会在每次
+// offline→online 抖动时悄悄抬高显示总量(每抖一次就把整个节点总量再加一遍),一个会话下来远超
+// 后端 —— 硬刷新时数值又跌回去然后再爬升。导出供单测使用。
 export function resolveTrafficTotal(previous: number, raw: number): number {
   return Number.isFinite(raw) && raw > 0 ? raw : previous;
 }
@@ -262,9 +256,8 @@ function shallowEqualNodeInfo(a: NodeInfo, b: NodeInfo) {
     a.traffic_limit === b.traffic_limit &&
     a.traffic_limit_type === b.traffic_limit_type &&
     a.created_at === b.created_at
-    // `updated_at` is intentionally excluded: the backend bumps it on every
-    // record write (~every 30s) but it isn't displayed, so comparing it would
-    // mark every node "changed" each sync and re-render the whole grid.
+    // 有意排除 `updated_at`:后端每次写记录(约 30s)都会更新它,但它并不展示,比较它会
+    // 让每次 sync 都把所有节点标记为"变化"并重渲染整个 grid。
   );
 }
 
@@ -408,9 +401,8 @@ function emitMappedListeners(
 
 function commit(next: State, touches: CommitTouches = {}) {
   state = next;
-  // Bumped on every state transition. Derived-list snapshots key their cache on
-  // it so the getSnapshot functions (called on every React render) can return a
-  // cached reference in O(1) when no commit has happened since the last call.
+  // 每次 state 转换都自增。派生列表的 snapshot 用它做缓存 key,这样 getSnapshot(每次 React
+  // 渲染都会调用)在上次调用后没有 commit 时能 O(1) 返回缓存引用。
   storeVersion += 1;
   const homeTouched = Boolean(
     touches.nodeList ||
@@ -497,12 +489,10 @@ function toTimestamp(value: string | number | undefined): number {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-// Derive the TCP connection count from a flat latest-status payload. That
-// contract sends `connections` as TCP+UDP combined (see common.go) with no
-// `connections_tcp`, so reading `connections` straight as TCP inflated the
-// "TCP 连接" stat by the UDP count. Derive TCP as connections − udp, preferring an
-// explicit `connections_tcp` when a future backend supplies one. Exported for
-// unit testing.
+// 从扁平的 latest-status payload 推导 TCP 连接数。该协议把 `connections` 作为 TCP+UDP 合计
+//(见 common.go)发送,没有 `connections_tcp`,所以直接把 `connections` 当 TCP 会让 "TCP 连接"
+// 统计虚高一个 UDP 数。这里用 connections − udp 推导,未来后端若提供显式 `connections_tcp`
+// 则优先用它。导出供单测使用。
 export function resolveFlatConnectionsTcp(payload: RealtimePayload): number {
   if (payload.connections_tcp != null) return asNumber(payload.connections_tcp);
   return Math.max(0, asNumber(payload.connections) - asNumber(payload.connections_udp));
@@ -602,10 +592,8 @@ function normalizeRealtime(
 function applyLatestStatus(records: Record<string, unknown>) {
   const touchedMetrics = new Set<string>();
   const touchedTrafficTrends = new Set<string>();
-  // Clone the maps lazily — a quiet tick (no metric/trend change) is common, and
-  // the caller discards an unchanged map, so spreading up front is pure churn.
-  // After syncNodeInfo every order uuid already has a trend entry, so there is
-  // nothing to backfill for unchanged nodes.
+  // 懒克隆 map —— 安静的 tick(metric/trend 无变化)很常见,且调用方会丢弃未变的 map,
+  // 提前 spread 纯属浪费。syncNodeInfo 之后每个 order uuid 都已有 trend 条目,未变节点无需补齐。
   let nextMetricsByUuid = state.metricsByUuid;
   let nextTrafficTrends = state.trafficTrends;
 
@@ -704,11 +692,9 @@ async function syncNodeInfo(force = false) {
 
     for (const info of nodes) {
       const prev = state.metaByUuid[info.uuid];
-      // Reuse the previous meta object when nothing displayed changed, so its
-      // identity stays stable and useSyncExternalStore doesn't re-render the card.
+      // 展示内容无变化时复用旧 meta 对象,保持引用稳定,让 useSyncExternalStore 不重渲染卡片。
       const isUnchanged = prev != null && shallowEqualNodeInfo(prev, info);
-      // Clone on change so the meta object gets a fresh identity (drives
-      // useSyncExternalStore re-renders); reuse `prev` when nothing changed.
+      // 有变化则克隆,给 meta 一个新引用(触发 useSyncExternalStore 重渲染);未变则复用 `prev`。
       const merged = isUnchanged ? prev : { ...info };
       metaByUuid[info.uuid] = merged;
       const previousMetrics = state.metricsByUuid[info.uuid];
@@ -757,8 +743,7 @@ async function syncNodeInfo(force = false) {
       {
         meta: touchedMeta,
         metrics: touchedMetrics,
-        // Traffic trends are only mutated by refreshLatestStatus; syncNodeInfo
-        // carries them over unchanged, so there's nothing to notify here.
+        // traffic trend 只由 refreshLatestStatus 改动;syncNodeInfo 原样带过来,这里无需通知。
         nodeList: nodeListChanged,
         allNodes: orderChanged || touchedMeta.size > 0,
       },
@@ -831,7 +816,7 @@ async function bootstrap() {
     await hydrate();
     await refreshLatestStatus();
   } catch {
-    // Retry on the next scheduled tick.
+    // 下一个调度 tick 再重试。
   }
 }
 
@@ -845,13 +830,11 @@ export function ensureStarted() {
 
   ensureScrollTrackingStarted();
   void bootstrap();
-  // Two independent cadences: live metrics every 2s, and node list/meta sync on
-  // its own 30s cadence. Previously these shared one awaited chain, so the tick
-  // that ran the slow /api/nodes fetch stalled that cycle's live refresh.
+  // 两条独立节奏:实时 metrics 每 2s,节点列表/meta sync 走自己的 30s 节奏。之前它们共用
+  // 一条 await 链,跑慢速 /api/nodes 拉取的那个 tick 会拖住本周期的实时刷新。
   liveStatusTimer = window.setInterval(() => {
-    // Until the first hydrate succeeds there is no node list to poll, so keep
-    // retrying bootstrap on the fast cadence (matching the old single-chain
-    // behaviour); switch to pure live refresh once hydrated.
+    // 首次 hydrate 成功前没有节点列表可轮询,所以按快节奏持续重试 bootstrap(沿用旧的单链
+    // 行为);hydrate 完成后切到纯实时刷新。
     if (!hydrated) {
       void bootstrap();
       return;
@@ -859,8 +842,8 @@ export function ensureStarted() {
     void refreshLatestStatus();
   }, LIVE_STATUS_REFRESH_INTERVAL_MS);
   nodeInfoTimer = window.setInterval(() => {
-    // syncNodeInfo only has a finally; swallow a transient /api/nodes failure so a
-    // failed 30s tick can't surface an unhandled rejection (the next tick retries).
+    // syncNodeInfo 只有 finally;吞掉偶发的 /api/nodes 失败,避免失败的 30s tick 抛出
+    // unhandled rejection(下一 tick 会重试)。
     void syncNodeInfo().catch(() => {});
   }, NODE_INFO_REFRESH_INTERVAL_MS);
 }

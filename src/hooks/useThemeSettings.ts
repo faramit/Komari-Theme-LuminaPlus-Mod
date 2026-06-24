@@ -4,9 +4,8 @@ import { normalizeThemeSettings, type ResolvedThemeSettings } from "@/utils/them
 
 export type ThemeSettingsState = ResolvedThemeSettings & {
   /**
-   * True once the server config has arrived. If the config request fails, this
-   * also becomes true so the app can fall back to defaults instead of staying
-   * blank forever.
+   * 服务端 config 到达后为 true。config 请求失败时它也会变 true，
+   * 让应用回退到默认值，而不是一直空白。
    */
   isReady: boolean;
   isLoading: boolean;

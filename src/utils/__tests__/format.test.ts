@@ -23,7 +23,7 @@ describe("formatBytes", () => {
     expect(formatBytes(undefined)).toBe("0 B");
     expect(formatBytes(-5)).toBe("0 B");
     expect(formatBytes(Number.NaN)).toBe("0 B");
-    // Regression guard: Infinity must not produce "Infinity PB".
+    // 防回归:Infinity 不能输出成 "Infinity PB"
     expect(formatBytes(Number.POSITIVE_INFINITY)).toBe("0 B");
   });
 
@@ -96,8 +96,8 @@ describe("getExpireDaysRemaining / formatExpireDays", () => {
   });
 
   it("treats Komari 'no expiry' sentinels as no-expiry, not as 已过期", () => {
-    // Regression: the Go zero-time and numeric 0 / -1 sentinels used to parse to
-    // year 1 / 2000 / 2001 and render never-expiring nodes "已过期".
+    // 防回归:Go 零值时间和数字 0 / -1 这些哨兵值以前会被解析成 1 年 / 2000 / 2001 年,
+    // 把永不过期的节点显示成"已过期"
     for (const sentinel of ["0001-01-01T00:00:00Z", "0", "-1", ""]) {
       expect(getExpireDaysRemaining(sentinel)).toBeNull();
       expect(formatExpireDays(sentinel)).toEqual({ value: "—", unit: "", tone: "none" });
@@ -109,7 +109,7 @@ describe("getExpireDaysRemaining / formatExpireDays", () => {
     expect(getExpireDaysRemaining(String(secs))).toBe(10);
     const ms = Date.now() + 5 * 86_400_000;
     expect(getExpireDaysRemaining(String(ms))).toBe(5);
-    // Sentinels resolve to "no timestamp".
+    // 哨兵值解析为"无时间戳"
     expect(resolveExpireTimestamp("0001-01-01T00:00:00Z")).toBeNull();
     expect(resolveExpireTimestamp(0)).toBeNull();
     expect(resolveExpireTimestamp(-1)).toBeNull();
@@ -126,9 +126,9 @@ describe("getExpireDaysRemaining / formatExpireDays", () => {
   });
 
   it("handles the today / expired boundary", () => {
-    // ~1h in the future floors to 0 remaining days.
+    // 未来约 1 小时会向下取整成剩余 0 天
     expect(formatExpireDays(inDays(0, 1))).toEqual({ value: "今日", unit: "", tone: "critical" });
-    // already past
+    // 已是过去时间
     expect(formatExpireDays(inDays(-2))).toEqual({ value: "已过期", unit: "", tone: "critical" });
   });
 });

@@ -24,8 +24,7 @@ describe("getCountryCodeFromRegion", () => {
   });
 
   it("prefers a real alias over a stray uppercase token (regression)", () => {
-    // "hong kong" must resolve to HK rather than being shadowed by a loose
-    // 2-letter regex match elsewhere in the string.
+    // "hong kong" 要解析成 HK,不能被串里别处一个松散的两字母正则匹配抢先盖掉
     expect(getCountryCodeFromRegion("Hong Kong")).toBe("HK");
   });
 
@@ -36,14 +35,14 @@ describe("getCountryCodeFromRegion", () => {
   });
 
   it("rejects stray 2-letter words that are not real ISO codes (regression)", () => {
-    // "GO" is a word, not a country code → must not resolve to a bogus flag.
+    // "GO" 是个单词不是国家代码 → 不能解析出一个假国旗
     expect(getCountryCodeFromRegion("GO Cloud")).toBeNull();
     expect(getDisplayRegionCode("GO Cloud")).toBe("UN");
   });
 
   it("still resolves a valid embedded code, even after a stray token", () => {
     expect(getCountryCodeFromRegion("SE Stockholm")).toBe("SE");
-    // first token invalid (GO), second valid (HK) → HK wins
+    // 第一个 token 无效(GO),第二个有效(HK) → HK 胜出
     expect(getCountryCodeFromRegion("GO HK")).toBe("HK");
   });
 });

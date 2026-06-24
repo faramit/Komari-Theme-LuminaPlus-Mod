@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type uPlot from "uplot";
 
-// Shared chart palette. LoadChart keys colors by metric (cpu/memory/…) while
-// PingChart cycles them per task; both draw from this single source so the hex
-// values can't drift between the two charts.
+// 共享的图表配色。LoadChart 按指标 (cpu/memory/…) 取色，PingChart 按 task 循环取色；
+// 两者都取自这一处单一来源，避免 hex 值在两个图表间漂移。
 export const CHART_PALETTE = {
   cpu: "#5d88ff",
   memory: "#a35cf5",
@@ -24,8 +23,7 @@ export function colorForSeries(index: number): string {
   return CHART_SERIES_COLORS[index % CHART_SERIES_COLORS.length];
 }
 
-// Axis grid/text colors for the uPlot charts. Single source so LoadChart and
-// PingChart can't drift on the dark/light literals.
+// uPlot 图表的坐标轴网格/文字颜色。单一来源，避免 LoadChart 和 PingChart 在 dark/light 字面量上漂移。
 export function getAxisColors(isDark: boolean): { grid: string; text: string } {
   return {
     grid: isDark ? "rgba(255,255,255,0.065)" : "rgba(0,0,0,0.08)",
@@ -33,7 +31,7 @@ export function getAxisColors(isDark: boolean): { grid: string; text: string } {
   };
 }
 
-// Shared hover-tooltip state shape for the uPlot charts (LoadChart / PingChart).
+// uPlot 图表 (LoadChart / PingChart) 共享的悬停 tooltip 状态结构。
 export interface ChartTooltipState {
   show: boolean;
   left: number;
@@ -47,9 +45,8 @@ interface TimeRangeOption {
   value: number;
 }
 
-// Load and ping share the same history presets; the only difference is whether a
-// "实时" option is prepended, which buildHistoryRangeOptions handles via its
-// includeRealtime flag rather than via the preset list itself.
+// load 和 ping 共用同一套历史区间预设；唯一区别是是否在前面加 "实时" 选项，这由
+// buildHistoryRangeOptions 的 includeRealtime 标志处理，而非改预设列表本身。
 const TIME_RANGE_OPTIONS: TimeRangeOption[] = [
   { label: "1 小时", value: 1 },
   { label: "4 小时", value: 4 },
@@ -112,8 +109,7 @@ const WIDE_CHART_GUTTER = 96;
 const WIDE_CHART_HEIGHT = 340;
 const WIDE_CHART_TABLET_HEIGHT = 300;
 const WIDE_CHART_MOBILE_HEIGHT = 260;
-// Quantize responsive chart widths to this step so drag-resizes collapse into
-// discrete sizes instead of rebuilding uPlot on every pixel.
+// 把响应式图表宽度量化到这个步长，让拖拽改尺寸收敛到离散尺寸，而非每个像素都重建 uPlot。
 const CHART_WIDTH_STEP = 8;
 
 export function toChartSeconds(value: string | number): number {
@@ -203,12 +199,10 @@ export function getChartTooltipPosition({
   return { left, top };
 }
 
-// The cursor/tooltip pipeline shared by LoadChart and PingChart. Both wire the
-// same uPlot hooks — hide on mouseleave, and on cursor move read the hovered x
-// timestamp, anchor the tooltip via getChartTooltipPosition, and commit it — so
-// only the per-series row formatting (buildRows) and the estimated tooltip width
-// differ. `dataRef` is a ref to the live AlignedData (the chart keeps its own
-// data in a ref so the hook closure isn't stale).
+// LoadChart 和 PingChart 共享的光标/tooltip 流程。两者接的是同一套 uPlot hook——mouseleave 时隐藏，
+// 光标移动时读取悬停的 x 时间戳，用 getChartTooltipPosition 定位并提交 tooltip——所以只有每行的
+// 格式化 (buildRows) 和 tooltip 预估宽度不同。`dataRef` 指向实时的 AlignedData (chart 把自己的数据
+// 存在 ref 里，免得 hook 闭包拿到过期数据)。
 export function buildChartTooltipHooks({
   dataRef,
   rangeHours,
@@ -271,10 +265,9 @@ export function useResponsiveChartSize(mode: "grid" | "wide") {
 
   useEffect(() => {
     function computeSize(viewportWidth: number, containerWidth?: number): { w: number; h: number } {
-      // The grid width is a continuous (width - gutter) / N below its cap, so an
-      // exact skip-if-unchanged never fires during a drag-resize and every rAF
-      // frame rebuilds all 6 uPlot charts. Quantizing to a step collapses runs of
-      // near-identical widths into one, so a rebuild happens ~once per step.
+      // 在封顶以下，grid 宽度是连续的 (width - gutter) / N，所以拖拽改尺寸时精确的"不变则跳过"
+      // 永远不触发，每个 rAF 帧都会重建全部 6 个 uPlot 图表。量化到步长能把一串近乎相同的宽度
+      // 收敛成一个，于是大约每步才重建一次。
       const q = (value: number) => Math.floor(value / CHART_WIDTH_STEP) * CHART_WIDTH_STEP;
 
       if (mode === "wide") {
@@ -316,9 +309,8 @@ export function useResponsiveChartSize(mode: "grid" | "wide") {
 
     function apply() {
       const next = computeSize(window.innerWidth, ref.current?.clientWidth);
-      // Skip the state update (and the uPlot teardown it triggers) when the
-      // computed size is unchanged — resize fires far more often than the
-      // breakpoint-bucketed dimensions actually change.
+      // 计算出的尺寸没变就跳过 setState (以及它触发的 uPlot 拆建)——resize 触发频率远高于
+      // 按断点分桶的尺寸真正变化的频率。
       setSize((prev) => (prev.w === next.w && prev.h === next.h ? prev : next));
     }
 

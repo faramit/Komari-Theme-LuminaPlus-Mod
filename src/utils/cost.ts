@@ -123,25 +123,22 @@ export function isCostRateApiUrlValid(value: string): boolean {
 
 export function normalizeCostRateApiUrl(value: unknown): string {
   const raw = typeof value === "string" ? value.trim() : "";
-  // Fall back to the default endpoint for blank or non-http(s) values so a bad
-  // persisted setting can't reach fetch() (where it would throw every cycle).
+  // 空值或非 http(s) 时回退到默认端点,免得坏掉的持久化设置进到 fetch()(那样每个周期都会抛错)。
   return raw && isCostRateApiUrlValid(raw) ? raw : DEFAULT_COST_RATE_API_URL;
 }
 
 function currencyCode(value: unknown) {
   const raw = String(value ?? "").trim();
-  // An unset currency is assumed to be the operator's target currency (CNY), not
-  // USD — defaulting to USD silently multiplied blank-currency, CNY-priced nodes
-  // by the USD rate (~7×) in the totals and remaining value.
+  // 未设置的货币默认按运营者的目标货币(CNY)算,而不是 USD——默认成 USD 会让没填货币、按 CNY 定价的
+  // 节点在总额和剩余价值里被悄悄乘上 USD 汇率(约 7 倍)。
   if (!raw) return COST_TARGET_CURRENCY;
 
   const key = raw.toUpperCase().replace(/\s+/g, "").replace("＄", "$");
   return CURRENCY_ALIASES[key] || (/^[A-Z]{3}$/.test(key) ? key : "");
 }
 
-// Only a positive day-count or the lifetime sentinel (-1) is meaningful; any
-// other numeric (0, negative, NaN) is treated as "unset" and falls back to a
-// yearly cycle so it can't silently distort the monthly/annual totals.
+// 只有正天数或永久哨兵值(-1)才有意义;其他数字(0、负数、NaN)都视为"未设置",回退到年付周期,
+// 免得悄悄扭曲月度/年度总额。
 function normalizeCycleNumeric(value: number): number {
   return value > 0 || value === -1 ? value : 365;
 }
@@ -173,8 +170,7 @@ function billingCycleDays(value: unknown): number {
 function cycleMonths(days: number) {
   if (days === 365 || days === 360) return 12;
   if (days === 30) return 1;
-  // Whole-year multiples (2yr=730, 3yr=1095, …) annualize exactly via /365 rather
-  // than the /30 fallback, which drifts ~1.4% low on multi-year cycles.
+  // 整年倍数(2 年 =730、3 年 =1095…)用 /365 精确年化,而不是用 /30 兜底(那样多年周期会偏低约 1.4%)。
   if (days > 0 && days % 365 === 0) return (days / 365) * 12;
   if (days > 0) return days / 30;
   return 0;
@@ -186,26 +182,21 @@ function remainingCycleValue(
   expiredAt: string | number | null | undefined,
 ) {
   const expiresMs = resolveExpireTimestamp(expiredAt);
-  // No real expiry (unset / lifetime / Go zero-time sentinel): treat it like the
-  // >100-year case below — a lifetime / one-time purchase still carries one cycle's
-  // worth of prepaid value rather than silently dropping out of the remaining total.
+  // 没有真实到期(未设置 / 永久 / Go 零时哨兵):当成下面 >100 年的情况——永久 / 一次性购买仍算作
+  // 一个周期的预付价值,而不是从剩余总额里悄悄消失。
   if (expiresMs == null) return price;
 
   const diffMs = expiresMs - Date.now();
   if (diffMs <= 0) return 0;
 
-  // A node whose expiry is >100 years out is a long-term / one-time purchase
-  // (the backend's auto-renewal treats it the same way) — report one cycle's
-  // worth rather than an astronomical multiple.
+  // 到期超过 100 年的节点属于长期 / 一次性购买(后端自动续费也是这么处理的)——报一个周期的价值,
+  // 而不是天文数字的倍数。
   const diffYears = diffMs / (1000 * 60 * 60 * 24 * 365);
   if (diffYears > 100) return price;
 
   if (cycleDays > 0) {
-    // `price` is the cost of a single billing cycle (one cycle advances the
-    // expiry by one period on the backend), so the prepaid value still owed is
-    // the number of cycles remaining until expiry × price. This is intentionally
-    // unbounded above: a node paid 6 months ahead on a monthly plan really does
-    // have 6× the cycle price remaining.
+    // `price` 是单个账单周期的费用(后端每续一个周期就把到期时间往后推一期),所以仍剩的预付价值就是
+    // 到期前剩余周期数 × price。这里故意不设上限:月付套餐预付了 6 个月的节点,确实剩 6 倍周期价。
     return price * (diffMs / (cycleDays * 24 * 60 * 60 * 1000));
   }
 
@@ -255,7 +246,7 @@ function writeRateCache(cacheKey: string, data: ExchangeRateData) {
   try {
     localStorage.setItem(cacheKey, JSON.stringify(data));
   } catch {
-    // React Query still keeps the latest value in memory for the current page session.
+    // React Query 在当前页面会话里仍把最新值留在内存中。
   }
 }
 
@@ -404,9 +395,8 @@ export function calculateCostSummary(
     const monthly = months > 0 ? converted / months : 0;
     const remaining = remainingCycleValue(converted, cycleDays, node.expired_at);
 
-    // `totalCny` is the annualized spend (monthly × 12) so nodes on different
-    // billing cycles are summed on a comparable basis; lifetime/one-time nodes
-    // (monthly === 0) contribute nothing to the recurring total.
+    // `totalCny` 是年化支出(月度 ×12),这样不同账单周期的节点能在同一口径上相加;永久/一次性节点
+    // (monthly === 0)对这个周期性总额不贡献。
     totalCny += monthly * 12;
     monthlyCny += monthly;
     remainingCny += remaining;

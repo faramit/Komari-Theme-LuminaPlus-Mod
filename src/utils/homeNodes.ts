@@ -6,7 +6,7 @@ export function getHomeGroupLabel(group: string) {
   return group.trim();
 }
 
-/** Trim, drop empties, and dedupe a list of raw group values, keeping first-seen order. */
+/** 对一组原始 group 值做 trim、去空、去重,保留首次出现的顺序。 */
 export function dedupeGroupLabels(groups: Iterable<string | null | undefined>): string[] {
   const seen = new Set<string>();
   const result: string[] = [];
@@ -25,15 +25,14 @@ export function getHomeGroupOptions(nodes: HomeNodeSummary[]) {
   return dedupeGroupLabels(nodes.map((node) => node.group));
 }
 
-/** Normalize a stored group order: trim, drop empties, dedupe (first-seen wins). */
+/** 规范化存下来的 group 排序:trim、去空、去重(首次出现的优先)。 */
 export function normalizeHomeGroupOrder(value: unknown): string[] {
   return Array.isArray(value) ? dedupeGroupLabels(value as Array<string | null | undefined>) : [];
 }
 
 /**
- * Order `groups` by the user-configured `order`: configured groups that still
- * exist come first (in the configured order), then any remaining groups keep
- * their original first-seen order. Returns `groups` unchanged when no order is set.
+ * 按用户配置的 `order` 给 `groups` 排序:仍存在的已配置 group 排在前面(按配置顺序),其余 group
+ * 保持原本首次出现的顺序。没设排序时原样返回 `groups`。
  */
 export function sortHomeGroupOptions(groups: string[], order: string[]): string[] {
   if (order.length === 0) return groups;

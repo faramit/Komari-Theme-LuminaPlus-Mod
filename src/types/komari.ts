@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-/** Schemas accept loose/partial payloads from the server, with sensible defaults. */
+/** Schema 接受服务端发来的宽松/不完整数据,并填充合理默认值。 */
 
 const looseString = z
   .union([z.string(), z.number(), z.boolean()])
@@ -103,7 +103,7 @@ export interface NodeRealtime {
   updated_at?: string | number;
 }
 
-/** Display model — flat info + realtime metrics + online flag. */
+/** 展示用模型:扁平化的节点信息 + 实时指标 + 在线标志。 */
 export interface NodeMetrics {
   online: boolean | null;
   cpuPct: number;

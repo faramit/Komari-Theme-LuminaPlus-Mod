@@ -4,8 +4,7 @@ import { formatBytes, formatUptimeDays } from "@/utils/format";
 import { resolveTrafficUsage } from "@/utils/traffic";
 import { InstancePanel } from "./InstancePanel";
 
-// Intl.DateTimeFormat is expensive to construct; reuse one instance instead of
-// rebuilding it on every metrics tick.
+// Intl.DateTimeFormat 构造开销大，复用一个实例，别每次 metrics 更新都重建
 const TIME_FORMATTER = new Intl.DateTimeFormat("zh-CN", {
   hour: "2-digit",
   minute: "2-digit",
@@ -30,10 +29,9 @@ export function InstanceDetails({
   useEffect(() => {
     if (!meta || !metrics || hasAlignedOnReadyRef.current) return;
     hasAlignedOnReadyRef.current = true;
-    // Fire the one-shot align, but don't adopt any cleanup it returns: the caller
-    // (alignCharts) returns an rAF-cancel intended for its own effect, and
-    // adopting it here would let a later meta/metrics change run that cleanup and
-    // cancel the pending scroll-into-view before it fires.
+    // 触发一次性对齐，但不接收它返回的 cleanup：调用方 (alignCharts) 返回的是给它自己
+    // effect 用的 rAF-cancel，这里若接收，后续 meta/metrics 变化会跑这个 cleanup，
+    // 在 scroll-into-view 触发前就把它取消掉。
     onNodeReady?.();
   }, [meta, metrics, onNodeReady]);
 
@@ -41,8 +39,8 @@ export function InstanceDetails({
 
   const isOnline = metrics.online;
   const uptime = formatUptimeDays(metrics.uptime);
-  // Reduce up/down per traffic_limit_type (max/sum/up/down/min) like the cards and
-  // the backend — summing both was wrong for non-"sum" nodes.
+  // 按 traffic_limit_type (max/sum/up/down/min) 归并上下行，和卡片、后端保持一致——
+  // 对非 "sum" 节点直接把上下行相加是错的。
   const trafficUsage = resolveTrafficUsage(
     meta.traffic_limit_type,
     metrics.trafficUp,

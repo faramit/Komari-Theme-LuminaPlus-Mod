@@ -22,9 +22,8 @@ export function useNodeCardModel(uuid: string, pingBucketCount?: number) {
   const ping = usePingMini(uuid);
   const pingBuckets = usePingMiniBuckets(ping, pingBucketCount);
 
-  // Meta-derived fields — tag parsing, expiry, renewal price, OS lookup — only
-  // change when meta changes (rarely), so they must not recompute on every ~1s
-  // metrics tick. Kept in a dedicated memo keyed on meta alone.
+  // meta 派生字段（tag 解析、到期、续费价、OS 查询）只在 meta 变化时才变（很少），
+  // 不能每秒 metrics 刷新都重算，所以单独用一个只依赖 meta 的 memo。
   const metaModel = useMemo(() => {
     if (!meta) return null;
     const tags = parseTags(meta.tags);
@@ -54,7 +53,7 @@ export function useNodeCardModel(uuid: string, pingBucketCount?: number) {
     };
   }, [meta]);
 
-  // Ping-derived colors only change when the ping item changes.
+  // ping 派生的颜色只在 ping item 变化时才变。
   const pingModel = useMemo(
     () => ({
       latencyColor: latencyHeatColor(ping.lastValue),
@@ -76,9 +75,8 @@ export function useNodeCardModel(uuid: string, pingBucketCount?: number) {
 
     const { loadBaseline } = metaModel;
 
-    // Traffic quota: reduce the cumulative up/down totals to "used" per the
-    // node's traffic_limit_type (matching the backend), then derive remaining and
-    // the usage fraction once here so both card layouts share the computation.
+    // 流量配额：按节点的 traffic_limit_type（与后端一致）把累计上/下行算成"已用"，
+    // 在这里一次性算出剩余和使用占比，让两种卡片布局共用这套计算。
     const trafficUsage = resolveTrafficUsage(
       meta.traffic_limit_type,
       metrics.trafficUp,
@@ -86,8 +84,8 @@ export function useNodeCardModel(uuid: string, pingBucketCount?: number) {
       meta.traffic_limit,
     );
     const trafficUsedLabel = formatBytes(trafficUsage.used);
-    // Unlimited renders as ∞ so the remaining value and the used/limit line stay
-    // parallel to the limited case ("剩余 ∞" + "2.73 GB / ∞").
+    // 不限量时渲染成 ∞，让剩余值和"已用/上限"那行与限量情况保持一致
+    //（"剩余 ∞" + "2.73 GB / ∞"）。
     const trafficLimitLabel = trafficUsage.unlimited ? "∞" : formatBytes(trafficUsage.limit);
     const traffic: TrafficDisplay = {
       fraction: trafficUsage.fraction,
@@ -113,10 +111,6 @@ export function useNodeCardModel(uuid: string, pingBucketCount?: number) {
       downRate: formatByteRate(metrics.netDown),
       isOnline: metrics.online === true,
       isOffline: metrics.online === false,
-      // The duration itself is computed in OfflineMask with a ticker so it keeps
-      // advancing while the node stays offline (metrics — and thus this memo —
-      // stop updating). Here we only expose the last-seen timestamp.
-      offlineSince: metrics.updatedAt,
     };
   }, [meta, metrics, metaModel, pingModel, ping, pingBuckets, trafficTrend]);
 }

@@ -40,9 +40,8 @@ const LOAD_RECORDS_PER_HOUR = 12;
 const PING_RECORDS_PER_HOUR = 240;
 const MAX_RPC_RECORDS = 20_000;
 const OVERVIEW_PING_MAX_COUNT = 4_000;
-// Plain HTTP GETs (/api/nodes, /api/public, the load/ping fallbacks) have no
-// transport timeout of their own, so cap them here — a half-open socket should
-// fail fast instead of hanging the caller forever.
+// 普通 HTTP GET(/api/nodes、/api/public、load/ping 兜底)自身没有传输超时,
+// 在这里统一兜底,half-open socket 能快速失败而不是无限挂住调用方。
 const DEFAULT_API_TIMEOUT_MS = 12_000;
 
 interface RpcRecordsPayload {
@@ -119,9 +118,8 @@ async function apiGet<T>(
   if (envelopeResult.success) return envelopeResult.data.data as T;
   const rawResult = schema.safeParse(json);
   if (rawResult.success) return rawResult.data;
-  // Surface both parse errors: for enveloped endpoints the envelope error is the
-  // useful one, for bare array/object endpoints the raw error is — and from here
-  // we can't tell which shape the endpoint was meant to return.
+  // 两种解析错误都抛出来:enveloped 接口看 envelope 错误,裸 array/object 接口看 raw
+  // 错误,而这里无法判断接口本该返回哪种结构。
   throw new Error(
     `Schema mismatch on ${path}: envelope=${
       envelopeResult.error.issues[0]?.message ?? ""
@@ -145,10 +143,9 @@ async function rpcCall<T>(
   return parsed.data;
 }
 
-// Drops individual malformed rows instead of throwing on the whole array. A
-// single bad record must not make the RPC normalize throw, because the callers
-// catch that and fall back to a full HTTP request — turning one bad row into a
-// permanent RPC + HTTP double-fetch on every poll.
+// 丢掉单条解析失败的记录,而不是让整个数组抛错。否则一条坏记录会让 RPC normalize
+// 抛错,调用方捕获后兜底到完整 HTTP 请求 —— 一条坏数据就变成每次轮询都 RPC + HTTP
+// 双重拉取。
 function parseArrayLenient<S extends z.ZodTypeAny>(schema: S, value: unknown): z.infer<S>[] {
   if (!Array.isArray(value)) return [];
   const out: z.infer<S>[] = [];
@@ -228,8 +225,8 @@ function normalizeRpcPingOverview(
 }
 
 export async function getMe(): Promise<Me> {
-  // Cast required: zod `.passthrough()` schemas infer through apiGet as their
-  // input type (defaulted fields optional), so the result must be re-narrowed.
+  // 必须 cast:zod `.passthrough()` schema 经 apiGet 推断出的是 input 类型(默认字段
+  // 变可选),这里要重新收窄回来。
   return (await apiGet("/api/me", MeSchema)) as Me;
 }
 
@@ -345,7 +342,7 @@ export async function saveThemeSettings(
         message = json.message;
       }
     } catch {
-      // Keep the fallback error message when the body is not JSON.
+      // body 不是 JSON 时保留兜底错误信息。
     }
     throw new ApiRequestError(message, resp.status, "/api/admin/theme/settings");
   }

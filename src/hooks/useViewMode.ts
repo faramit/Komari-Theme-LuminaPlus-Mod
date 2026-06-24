@@ -33,7 +33,7 @@ function writeOverride(key: string, value: NodeViewMode) {
   try {
     sessionStorage.setItem(key, value);
   } catch {
-    // Keep in-memory behavior if session storage is unavailable.
+    // session storage 不可用时，保留内存里的行为。
   }
 }
 
@@ -41,7 +41,7 @@ function clearOverride(key: string) {
   try {
     sessionStorage.removeItem(key);
   } catch {
-    // Nothing to clear if session storage is unavailable.
+    // session storage 不可用时没什么可清的。
   }
 }
 
@@ -78,9 +78,9 @@ function refreshSnapshot() {
 let snapshotInitialized = false;
 
 function getSnapshot(): ViewModeState {
-  // useSyncExternalStore calls getSnapshot on every render, so it must be cheap
-  // and stable. Read storage/matchMedia exactly once to seed the cache; after
-  // that the snapshot is kept fresh by the media/storage/setMode handlers.
+  // useSyncExternalStore 每次 render 都会调 getSnapshot，所以它必须便宜且稳定。
+  // 只读一次 storage/matchMedia 来初始化缓存；之后由 media/storage/setMode
+  // 处理器保持 snapshot 新鲜。
   if (!snapshotInitialized) {
     snapshotInitialized = true;
     refreshSnapshot();
@@ -113,9 +113,8 @@ function clearMediaSubscription() {
   subscribedMediaQuery = null;
 }
 
-// Cross-tab override sync. Registered once for the whole module (on the first
-// subscriber) rather than per-hook-instance — every consumer shares the same
-// global state, so N components would otherwise install N identical listeners.
+// 跨标签页同步 override。整个模块只注册一次（在第一个订阅者时），而不是每个 hook
+// 实例都注册——所有消费者共享同一份全局状态，否则 N 个组件会装 N 个一样的 listener。
 const handleStorage = (event: StorageEvent) => {
   if (event.key === DESKTOP_OVERRIDE_KEY || event.key === MOBILE_OVERRIDE_KEY) {
     refreshSnapshot();
@@ -165,9 +164,8 @@ export function useViewMode() {
   const setMode = useCallback(
     (next: NodeViewMode) => {
       const key = getOverrideKey(state.device);
-      // Selecting the current theme default clears the session override and
-      // follows the default again, instead of pinning an override that can never
-      // be removed (which would also stop future default changes from applying).
+      // 选中当前主题默认值时，清掉 session override 重新跟随默认值，而不是钉一个
+      // 永远去不掉的 override（那样还会让未来的默认值变化无法生效）。
       if (next === defaultMode) {
         clearOverride(key);
       } else {
@@ -193,10 +191,9 @@ export function useViewMode() {
   };
 }
 
-// Non-reactive read for contexts that can't use hooks (e.g. the class ErrorBoundary
-// diagnostics). Reports device + any session override; the theme default isn't
-// included because resolving it needs themeSettings (a hook), but device + override
-// already disambiguate compact-vs-large in the common cases.
+// 给用不了 hook 的场景做非响应式读取（如 class ErrorBoundary 的诊断）。返回
+// device + 任意 session override；不含主题默认值，因为解析它需要 themeSettings（一个
+// hook），但 device + override 在常见情况下已能区分 compact 和 large。
 export function readViewModeHint(): string {
   try {
     const { device, override } = readSnapshot();

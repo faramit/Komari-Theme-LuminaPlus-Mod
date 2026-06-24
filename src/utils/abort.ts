@@ -1,15 +1,12 @@
 interface ManagedTimeoutSignal {
   signal: AbortSignal;
-  // Clears the pending timeout and detaches the upstream-abort listener.
-  // Idempotent — safe to call from a finally block and again on abort.
+  // 清掉待触发的 timeout 并解绑 upstream abort 监听。幂等,finally 里调用、abort 时再调用都安全。
   cleanup: () => void;
 }
 
-// Combine an optional upstream signal with a timeout under a single controller.
-// The timer is always self-managed (never AbortSignal.timeout, whose timer
-// lingers for the full duration even after the work settles), so `cleanup` can
-// cancel it the instant the caller is done. Consumed by signalWithTimeout (which
-// drops the handle) and fetchWithTimeout (which runs it in finally).
+// 把可选的 upstream signal 和一个 timeout 合并到同一个 controller 下。timer 始终自己管
+// (不用 AbortSignal.timeout,它的定时器即便活儿干完了也会挂满整个时长),这样 cleanup 能在
+// 调用方结束的瞬间取消它。signalWithTimeout(丢掉 handle)和 fetchWithTimeout(在 finally 里跑)都用它。
 function createTimeoutSignal(
   upstream: AbortSignal | undefined,
   ms: number,
@@ -44,12 +41,11 @@ function createTimeoutSignal(
   return { signal: controller.signal, cleanup };
 }
 
-// Derive an AbortSignal that fires when `signal` aborts or `ms` elapses.
+// 派生一个在 `signal` abort 或 `ms` 到时触发的 AbortSignal。
 //
-// NOTE: this drops the cleanup handle, so its timer survives until it fires even
-// if the work finished first (bounded churn — one timer per call, capped at the
-// timeout). Callers that own the request lifecycle should prefer fetchWithTimeout
-// so the timer is cancelled the moment the request settles.
+// 注意:这里丢掉了 cleanup handle,所以即便活儿先干完,timer 也会一直挂到触发为止(开销有限,
+// 每次调用一个 timer,上限就是这个 timeout)。掌握请求生命周期的调用方应优先用 fetchWithTimeout,
+// 请求一结束 timer 就被取消。
 export function signalWithTimeout(
   signal: AbortSignal | undefined,
   ms: number,
@@ -57,10 +53,8 @@ export function signalWithTimeout(
   return createTimeoutSignal(signal, ms).signal;
 }
 
-// fetch() whose timeout timer and upstream-abort listener are torn down the
-// instant the request settles — success or failure — rather than lingering until
-// the timeout elapses. Prefer this over fetch(url, { signal: signalWithTimeout })
-// on hot paths.
+// 请求一结束(不管成功失败)就立刻拆掉 timeout timer 和 upstream abort 监听的 fetch(),而不是
+// 一直挂到 timeout 到时。热路径上优先用它,别用 fetch(url, { signal: signalWithTimeout })。
 export async function fetchWithTimeout(
   input: RequestInfo | URL,
   init: RequestInit | undefined,

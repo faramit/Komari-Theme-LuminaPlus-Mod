@@ -148,8 +148,7 @@ export function normalizeThemeSettings(
     compactShowTrafficTotal: enabledUnlessFalse(settings?.compactShowTrafficTotal),
     compactShowBilling: enabledUnlessFalse(settings?.compactShowBilling),
     compactShowUptime: enabledUnlessFalse(settings?.compactShowUptime),
-    // Default OFF (opt-in): connection counts are a niche metric and many agents
-    // don't report them, so we only show when explicitly enabled.
+    // 默认关闭(需手动开启):连接数是个小众指标,很多 agent 也不上报,所以只在显式启用时才显示。
     showConnections: settings?.showConnections === true,
     costIgnoredNodes: normalizeCostIgnoredNodes(settings?.costIgnoredNodes),
     costRateApiUrl: normalizeCostRateApiUrl(settings?.costRateApiUrl),

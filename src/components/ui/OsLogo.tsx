@@ -177,10 +177,8 @@ const DEFAULT_OS_CONFIG: OsConfig = {
   keywords: ["unknown"],
 };
 
-// Match keywords on word boundaries instead of raw substrings. Substring
-// matching misfired badly: "darwin" (macOS uname) contains "win" → Windows,
-// "unix" contains "nix" → NixOS, etc. A precompiled \b-anchored alternation
-// per OS avoids that while still allowing multi-word keywords like "red hat".
+// 按单词边界匹配关键词,而不是裸子串。子串匹配会严重误判:"darwin"(macOS uname)含 "win"→Windows、
+// "unix" 含 "nix"→NixOS 等。每个 OS 预编译一个 \b 锚定的 alternation 既能避免误判,又支持 "red hat" 这种多词关键词。
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -226,8 +224,7 @@ export function OsLogo({
   size?: number;
 }) {
   const os = resolveOsInfo(value);
-  // Fall back to the default Linux logo if a specific OS logo file is missing,
-  // so a rare/typo'd OS string renders a real icon instead of a broken image.
+  // 某个 OS logo 文件缺失时回退到默认 Linux logo,这样冷门或拼错的 OS 字符串也能显示真图标而不是裂图
   const [errored, setErrored] = useState(false);
   useEffect(() => {
     setErrored(false);

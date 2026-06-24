@@ -12,6 +12,7 @@ import {
   formatByteRateLabel,
 } from "@/utils/format";
 import { calculateCostSummary, formatCnyMoney, getExchangeRates } from "@/utils/cost";
+import { speedRateColor } from "@/utils/metricTone";
 import {
   getHomeGroupLabel,
   getHomeGroupOptions,
@@ -29,8 +30,8 @@ import { CompactNodeCard } from "./CompactNodeCard";
 import { CostSummary } from "./CostSummary";
 import { NodeCard } from "./NodeCard";
 
-// Joins uuids into a single signature string for memo keying. A comma is safe:
-// node uuids are standard UUIDs ([0-9a-f-]) and never contain one.
+// 把多个 uuid 拼成单个签名串作为 memo key。逗号安全:uuid 是标准 UUID
+// ([0-9a-f-]),永远不含逗号。
 const UUID_KEY_SEPARATOR = ",";
 
 interface HomeOverview {
@@ -139,10 +140,26 @@ function HomeOverviewCards({
             <span className="overview-card-unit">/ {overview.totalNodes}</span>
           </p>
         </div>
-        <div className="overview-bar" role="presentation">
-          <span className="overview-bar-online" style={{ width: `${onlinePct}%` }} />
-          <span className="overview-bar-offline" style={{ width: `${offlinePct}%` }} />
-        </div>
+        {overview.totalNodes >= 5 && overview.totalNodes <= 10 ? (
+          // 节点数 5–10 时改用块状:每台一格,在线格在左、离线格在右、未知格居中,
+          // 与条状的「左绿右红」完全同步。颜色复用同一组 token,避免该红却绿。
+          <div className="overview-blocks" role="presentation">
+            {Array.from({ length: overview.totalNodes }, (_, i) => {
+              const cls =
+                i < overview.onlineNodes
+                  ? "overview-block is-online"
+                  : i >= overview.totalNodes - overview.offlineNodes
+                    ? "overview-block is-offline"
+                    : "overview-block";
+              return <span key={i} className={cls} />;
+            })}
+          </div>
+        ) : (
+          <div className="overview-bar" role="presentation">
+            <span className="overview-bar-online" style={{ width: `${onlinePct}%` }} />
+            <span className="overview-bar-offline" style={{ width: `${offlinePct}%` }} />
+          </div>
+        )}
       </article>
 
       <article className="overview-card">
@@ -165,7 +182,7 @@ function HomeOverviewCards({
       <article className="overview-card">
         <span className="overview-card-label">实时带宽</span>
         <div className="overview-card-main">
-          <p className="overview-card-value">
+          <p className="overview-card-value" style={{ color: speedRateColor(rate.unit) }}>
             {rate.value}
             <span className="overview-card-unit">{rate.unit}</span>
           </p>
@@ -285,11 +302,10 @@ export function NodeGrid() {
   }, [visibleNodes]);
   const showHomeOverview = themeSettings.isReady && themeSettings.showHomeOverview;
   const hasNodes = allMeta.length > 0;
-  // The 资产概览 card (剩余价值) always shows in the overview so toggling cost
-  // settings never reflows the row. showCostSummary gates that card's top-right
-  // detail button; the floating ball is a fallback entry — shown only when the
-  // detail button isn't (overview hidden or its toggle off), so the two entry
-  // points never both appear (when both settings are on, the in-card detail wins).
+  // 资产概览卡片(剩余价值)始终显示,这样切换花费相关设置不会让整行重排。
+  // showCostSummary 控制卡片右上角的详情按钮;悬浮球是兜底入口,只在详情按钮
+  // 不显示时出现(总览隐藏或其开关关闭),所以两个入口不会同时出现(都开时卡内
+  // 详情按钮优先)。
   const showAssetCard = showHomeOverview && hasNodes;
   const showCostDetailButton =
     showAssetCard && themeSettings.isReady && themeSettings.showCostSummary;
@@ -298,8 +314,7 @@ export function NodeGrid() {
     themeSettings.showCostSummaryFloatingButton &&
     hasNodes &&
     !showCostDetailButton;
-  // Compute cost whenever something consumes it: the always-on asset card, or the
-  // floating ball / panel. The panel is only mounted when it can actually be opened.
+  // 只要有东西用到花费就计算:常驻的资产卡片,或悬浮球/面板。面板只在能被打开时才挂载。
   const costNeeded = showAssetCard || showCostFloatingButton;
   const shouldRenderCostSummary = showCostDetailButton || showCostFloatingButton;
   const rateQuery = useQuery({
@@ -345,11 +360,9 @@ export function NodeGrid() {
     }
   }, [groupOptions, selectedGroup]);
 
-  // The summary objects get a fresh reference every ~1s tick, so filteredNodes
-  // (and a naive uuids map) rebuild constantly. Key the rendered card list on a
-  // stable uuid signature instead, so the list only re-renders when the set or
-  // order actually changes — each card subscribes to its own store slices and
-  // updates independently.
+  // summary 对象每隔约 1s tick 就换新引用,导致 filteredNodes(以及直接映射 uuid)
+  // 不停重建。改用稳定的 uuid 签名作为卡片列表的 key,这样只有集合或顺序真正变化时
+  // 才重渲染——每张卡各自订阅自己的 store 切片、独立更新。
   const uuidsKey = useMemo(
     () => filteredNodes.map((node) => node.uuid).join(UUID_KEY_SEPARATOR),
     [filteredNodes],
@@ -364,8 +377,8 @@ export function NodeGrid() {
   }, [uuidsKey, mode]);
   const showGroupTabs =
     themeSettings.isReady && themeSettings.showGroupTabs && groupOptions.length > 0;
-  // Shared by the group-tab rail and the card grid so the tab bar sits in the same
-  // grid and fills exactly one card column — its edges line up with the first card.
+  // 分组标签栏和卡片网格共用,让标签栏处在同一网格中、正好占一列卡片宽——
+  // 边缘和第一张卡片对齐。
   const gridClassName = mode === "compact" ? "grid gap-3 xl:gap-4" : "grid gap-4 xl:gap-5";
   const gridColumns =
     mode === "compact"

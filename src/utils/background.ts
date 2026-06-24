@@ -5,9 +5,8 @@ export type ResolvedAppearance = Exclude<Appearance, "system">;
 export const DEFAULT_BACKGROUND_ALIGNMENT = "cover,center";
 export const DEFAULT_SURFACE_OPACITY = 100;
 
-// Above this card opacity we treat the surfaces as effectively solid: no
-// backdrop-filter is emitted and no readability scrim is drawn, so the default
-// (100) experience carries zero extra paint cost. Glass kicks in only below it.
+// 卡片不透明度高于此值就当作完全不透明:不输出 backdrop-filter、不画可读性 scrim,所以默认值
+// (100) 没有任何额外绘制开销。低于此值才启用 glass 效果。
 export const SURFACE_GLASS_THRESHOLD = 95;
 
 const BACKGROUND_SIZE_VALUES = ["cover", "contain", "auto"] as const;
@@ -18,11 +17,9 @@ export type BackgroundPosition = (typeof BACKGROUND_POSITION_VALUES)[number];
 
 const MAX_URL_LENGTH = 2048;
 
-// Strip everything that could break out of a CSS url("…") context or smuggle in
-// extra declarations: control chars (incl. DEL), whitespace (URLs encode spaces
-// as %20), quotes, backtick, parens, angle brackets and backslash. Values are
-// also fed through element.style, which already forbids cross-property
-// injection, so this is defense in depth rather than the sole guard.
+// 去掉所有可能逃出 CSS url("…") 上下文或夹带额外声明的字符:控制字符(含 DEL)、空白(URL 里空格
+// 用 %20)、引号、反引号、括号、尖括号、反斜杠。这些值还会经过 element.style(本身就禁止跨属性注入),
+// 所以这只是纵深防御,不是唯一防线。
 const UNSAFE_URL_CHARS = new RegExp("[\\x00-\\x1f\\x7f\"'`()<>\\\\\\s]", "g");
 
 function sanitizeUrlPart(part: string): string {
@@ -30,10 +27,9 @@ function sanitizeUrlPart(part: string): string {
 }
 
 /**
- * Normalizes a background image setting. The value may encode an appearance pair
- * as `lightUrl|darkUrl` (purcarte convention); we keep at most those two parts,
- * sanitize each, and collapse to a single url when light and dark match. An empty
- * light side (`|darkUrl`) is preserved so a dark-only background round-trips.
+ * 规范化背景图设置。值可能用 `lightUrl|darkUrl` 编码明暗两套(purcarte 约定);最多保留这两段,
+ * 各自 sanitize,light 和 dark 相同时塌缩成单个 url。空的 light 段(`|darkUrl`)会保留,这样
+ * 只有 dark 背景也能原样往返。
  */
 export function normalizeBackgroundUrl(value: unknown): string {
   if (typeof value !== "string") return "";
@@ -45,9 +41,8 @@ export function normalizeBackgroundUrl(value: unknown): string {
 }
 
 /**
- * Picks the appearance-appropriate url from a normalized background value. A
- * single url applies to both appearances; a `light|dark` pair selects by the
- * resolved appearance.
+ * 从规范化后的背景值里挑出对应外观的 url。单个 url 对明暗都生效;`light|dark` 一对则按解析出的
+ * 外观选取。
  */
 export function resolveBackgroundUrl(
   raw: string,
@@ -94,26 +89,25 @@ export function normalizeSurfaceOpacity(value: unknown): number {
 }
 
 export interface BackgroundGlass {
-  /** Whether translucent-glass treatment (backdrop blur + scrim) should apply. */
+  /** 是否启用半透明玻璃效果(backdrop blur + scrim)。 */
   active: boolean;
-  /** backdrop-filter blur radius in px. */
+  /** backdrop-filter 的 blur 半径,单位 px。 */
   blurPx: number;
-  /** Readability scrim strength as a 0–100 mix of --bg-0 over the image. */
+  /** 可读性 scrim 强度,即 --bg-0 覆盖在图片上的 0–100 混合比例。 */
   scrimPct: number;
 }
 
 /**
- * Derives the blur + scrim from the single card-opacity knob. At/above the glass
- * threshold nothing is applied (solid surfaces, zero cost); below it, blur and
- * scrim ramp up proportionally so a more transparent card stays legible without
- * exposing extra sliders. Both are capped to stay tasteful and cheap.
+ * 仅凭卡片不透明度这一个旋钮推导 blur + scrim。达到/超过 glass 阈值什么都不加(不透明表面、零开销);
+ * 低于阈值时 blur 和 scrim 按比例增强,这样越透明的卡片也能保持可读,不必再暴露额外滑块。两者都有上限,
+ * 既好看又便宜。
  */
 export function computeBackgroundGlass(opacity: unknown): BackgroundGlass {
   const resolved = normalizeSurfaceOpacity(opacity);
   if (resolved >= SURFACE_GLASS_THRESHOLD) {
     return { active: false, blurPx: 0, scrimPct: 0 };
   }
-  const t = (SURFACE_GLASS_THRESHOLD - resolved) / SURFACE_GLASS_THRESHOLD; // 0–1
+  const t = (SURFACE_GLASS_THRESHOLD - resolved) / SURFACE_GLASS_THRESHOLD; // 取值 0–1
   return {
     active: true,
     blurPx: Math.min(20, Math.round(t * 28)),
@@ -131,20 +125,19 @@ interface BackgroundSettingsInput {
 }
 
 /**
- * Pre-resolved, CSS-ready background values cached in localStorage so the
- * index.html inline script can paint the background + surface transparency on
- * the very first frame (no opaque→glass flash). Both appearances are stored
- * because the inline script knows the resolved appearance but can't run React.
+ * 预解析好、可直接用于 CSS 的背景值,缓存在 localStorage 里,这样 index.html 的内联脚本能在第一帧
+ * 就画出背景 + 表面透明度(避免 opaque→glass 的闪烁)。明暗两套都存,因为内联脚本知道解析出的外观
+ * 但跑不了 React。
  */
 export interface BackgroundCache {
   v: 1;
   size: string;
   position: string;
-  /** Card opacity 0–100 as a string, ready for the --surface-alpha var. */
+  /** 卡片不透明度 0–100 的字符串形式,可直接给 --surface-alpha 变量用。 */
   alpha: string;
-  /** "" (no glass) or e.g. "13px" for --surface-blur. */
+  /** "" (无 glass) 或形如 "13px",给 --surface-blur 用。 */
   blur: string;
-  /** "" or a color-mix(...) string for --bg-scrim. */
+  /** "" 或 color-mix(...) 字符串,给 --bg-scrim 用。 */
   scrim: string;
   lightDesktop: string;
   lightMobile: string;
@@ -193,9 +186,8 @@ const BACKGROUND_VAR_NAMES = [
 ] as const;
 
 /**
- * Writes (or clears) the background CSS variables + glass gate on <html> for the
- * given appearance. Mirrors the index.html inline script so React and the
- * pre-paint bootstrap converge on identical values.
+ * 按给定外观把背景 CSS 变量 + glass 开关写到(或清除自)<html> 上。与 index.html 内联脚本保持一致,
+ * 让 React 和预绘制引导收敛到完全相同的值。
  */
 export function applyBackgroundCache(
   cache: BackgroundCache | null,
@@ -233,6 +225,6 @@ export function persistBackgroundCache(cache: BackgroundCache | null): void {
     if (cache) localStorage.setItem(BACKGROUND_CACHE_KEY, JSON.stringify(cache));
     else localStorage.removeItem(BACKGROUND_CACHE_KEY);
   } catch {
-    // Background just won't be cached for the next first paint; non-fatal.
+    // 大不了下次首屏背景没缓存而已,非致命。
   }
 }
