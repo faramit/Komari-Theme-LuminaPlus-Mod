@@ -27,7 +27,7 @@ function sanitizeUrlPart(part: string): string {
 }
 
 /**
- * 规范化背景图设置。值可能用 `lightUrl|darkUrl` 编码明暗两套(purcarte 约定);最多保留这两段,
+ * 规范化背景图设置。值可能用 `lightUrl|darkUrl` 编码明暗两套;最多保留这两段,
  * 各自 sanitize,light 和 dark 相同时塌缩成单个 url。空的 light 段(`|darkUrl`)会保留,这样
  * 只有 dark 背景也能原样往返。
  */
@@ -115,6 +115,7 @@ export function computeBackgroundGlass(opacity: unknown): BackgroundGlass {
   };
 }
 
+// Legacy key retained so existing users keep their saved background after the rename.
 export const BACKGROUND_CACHE_KEY = "komaritheme:bg";
 
 interface BackgroundSettingsInput {

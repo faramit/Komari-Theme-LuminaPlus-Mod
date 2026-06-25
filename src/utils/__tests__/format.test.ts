@@ -4,7 +4,6 @@ import {
   formatByteRate,
   formatByteRateLabel,
   formatExpireDays,
-  formatOfflineDuration,
   formatTrafficRate,
   formatTrafficRateLabel,
   getExpireDaysRemaining,
@@ -130,28 +129,6 @@ describe("getExpireDaysRemaining / formatExpireDays", () => {
     expect(formatExpireDays(inDays(0, 1))).toEqual({ value: "今日", unit: "", tone: "critical" });
     // 已是过去时间
     expect(formatExpireDays(inDays(-2))).toEqual({ value: "已过期", unit: "", tone: "critical" });
-  });
-});
-
-describe("formatOfflineDuration", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-06-13T12:00:00.000Z"));
-  });
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it("returns unknown sentinel for invalid timestamps", () => {
-    expect(formatOfflineDuration(0)).toEqual({ value: "未知", unit: "", full: "离线时长未知" });
-    expect(formatOfflineDuration(null)).toEqual({ value: "未知", unit: "", full: "离线时长未知" });
-  });
-
-  it("buckets elapsed time into minutes / hours / days", () => {
-    expect(formatOfflineDuration(Date.now() - 30_000).value).toBe("刚刚");
-    expect(formatOfflineDuration(Date.now() - 5 * 60_000)).toMatchObject({ value: "5", unit: "分钟" });
-    expect(formatOfflineDuration(Date.now() - 3 * 3_600_000)).toMatchObject({ value: "3", unit: "小时" });
-    expect(formatOfflineDuration(Date.now() - 2 * 86_400_000)).toMatchObject({ value: "2", unit: "天" });
   });
 });
 

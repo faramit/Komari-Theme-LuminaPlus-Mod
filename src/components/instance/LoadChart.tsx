@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import UplotReact from "uplot-react";
 import type uPlot from "uplot";
-import { ArrowDown, ArrowUp, Cpu, Gauge, HardDrive, MemoryStick, Network, Workflow } from "lucide-react";
+import { ArrowDown, ArrowUp, Cpu, Gauge, HardDrive, MemoryStick, Network, RefreshCw, Workflow } from "lucide-react";
 import { useLoadRecords } from "@/hooks/useRecords";
 import { useNodeMetrics } from "@/hooks/useNode";
 import { InstancePanel, InstanceChartLoading } from "./InstancePanel";
@@ -382,7 +382,7 @@ export function LoadChart({
   active?: boolean;
 }) {
   const queryHours = hours === 0 ? 1 : hours;
-  const { data, isLoading } = useLoadRecords(uuid, queryHours, active);
+  const { data, isLoading, refetch } = useLoadRecords(uuid, queryHours, active);
   const isRealtime = hours === 0;
   const node = useNodeMetrics(uuid, isRealtime && active);
   const { resolvedAppearance } = usePreferences();
@@ -470,35 +470,40 @@ export function LoadChart({
   return (
     <InstancePanel
       title="负载图表"
-      description={coverageSummary}
-      aside={<span className="instance-chart-range-chip">{rangeSummary}</span>}
+      aside={
+        <div className="instance-chart-headmeta">
+          <div className="instance-chart-meta" aria-label="图表数据范围">
+            <span>
+              覆盖 <strong>{coverageSummary}</strong>
+            </span>
+            <span>
+              采样 <strong>{sampleSummary}</strong>
+            </span>
+          </div>
+          <button
+            type="button"
+            className="instance-toggle-button instance-switch-button"
+            data-active={connectNulls ? "true" : "false"}
+            onClick={() => setConnectNulls((value) => !value)}
+            aria-pressed={connectNulls}
+          >
+            <span className="instance-switch-copy">断点连线</span>
+            <span className="instance-switch-track" aria-hidden>
+              <span className="instance-switch-thumb" />
+            </span>
+            <span className="instance-switch-state">
+              {connectNulls ? "开启" : "关闭"}
+            </span>
+          </button>
+          <button type="button" className="instance-toggle-button" onClick={() => void refetch()}>
+            <RefreshCw size={14} />
+            刷新
+          </button>
+          <span className="instance-chart-range-chip">{rangeSummary}</span>
+        </div>
+      }
       className="instance-chart-panel"
     >
-      <div className="instance-chart-toolbar">
-        <div className="instance-chart-meta" aria-label="图表数据范围">
-          <span>
-            覆盖 <strong>{coverageSummary}</strong>
-          </span>
-          <span>
-            采样 <strong>{sampleSummary}</strong>
-          </span>
-        </div>
-        <button
-          type="button"
-          className="instance-toggle-button instance-switch-button"
-          data-active={connectNulls ? "true" : "false"}
-          onClick={() => setConnectNulls((value) => !value)}
-          aria-pressed={connectNulls}
-        >
-          <span className="instance-switch-copy">断点连线</span>
-          <span className="instance-switch-track" aria-hidden>
-            <span className="instance-switch-thumb" />
-          </span>
-          <span className="instance-switch-state">
-            {connectNulls ? "开启" : "关闭"}
-          </span>
-        </button>
-      </div>
       <div className="instance-chart-grid">
         <ChartCard
           icon={<Cpu size={13} />}

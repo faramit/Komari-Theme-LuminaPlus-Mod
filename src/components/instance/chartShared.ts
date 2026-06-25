@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type uPlot from "uplot";
 
 // 共享的图表配色。LoadChart 按指标 (cpu/memory/…) 取色，PingChart 按 task 循环取色；
@@ -11,16 +11,43 @@ export const CHART_PALETTE = {
   warning: "#d4a54a",
 } as const;
 
+// 备用定性色板（仅缺少总数时用）；正常走下面的 OKLCH 生成。
 const CHART_SERIES_COLORS = [
-  CHART_PALETTE.cpu,
-  CHART_PALETTE.success,
-  CHART_PALETTE.memory,
-  CHART_PALETTE.disk,
-  CHART_PALETTE.warning,
+  "#4878d0", // 蓝
+  "#ee854a", // 橙
+  "#6acc64", // 绿
+  "#d65f5f", // 红
+  "#956cb4", // 紫
+  "#8c613c", // 棕
+  "#dc7ec0", // 粉
+  "#4aa7a0", // 青
+  "#c7b446", // 芥黄
+  "#82c6e2", // 浅蓝
 ] as const;
 
-export function colorForSeries(index: number): string {
-  return CHART_SERIES_COLORS[index % CHART_SERIES_COLORS.length];
+let oklchSupported: boolean | null = null;
+function supportsOklch(): boolean {
+  if (oklchSupported === null) {
+    oklchSupported =
+      typeof window !== "undefined" &&
+      typeof window.CSS !== "undefined" &&
+      typeof window.CSS.supports === "function" &&
+      window.CSS.supports("color", "oklch(0.7 0.2 120 / 0.85)");
+  }
+  return oklchSupported;
+}
+
+export function colorForSeries(index: number, total?: number): string {
+  // 没有总数时（防御性调用）退回精选板。
+  if (typeof total !== "number" || total <= 0) {
+    return CHART_SERIES_COLORS[index % CHART_SERIES_COLORS.length];
+  }
+  // 色相按总数均分，用 OKLCH 渲染：固定明度让每条线一样亮、中等彩度不刺眼、0.85 透明度让密集区
+  // 混色不互相盖死；不支持则降级 HSL。
+  const hue = Math.round((index * 360) / total);
+  return supportsOklch()
+    ? `oklch(0.7 0.2 ${hue} / 0.95)`
+    : `hsl(${hue}, 50%, 60%)`;
 }
 
 // uPlot 图表的坐标轴网格/文字颜色。单一来源，避免 LoadChart 和 PingChart 在 dark/light 字面量上漂移。
@@ -102,7 +129,7 @@ const GRID_CHART_TABLET_MAX_WIDTH = 560;
 const GRID_CHART_DESKTOP_GUTTER = 180;
 const GRID_CHART_TABLET_GUTTER = 100;
 const GRID_CHART_MOBILE_GUTTER = 56;
-const GRID_CHART_HEIGHT = 148;
+const GRID_CHART_HEIGHT = 132;
 const WIDE_CHART_MIN_WIDTH = 300;
 const WIDE_CHART_MAX_WIDTH = 1720;
 const WIDE_CHART_GUTTER = 96;
@@ -255,89 +282,104 @@ export function buildChartTooltipHooks({
   };
 }
 
+function computeChartSize(
+  mode: "grid" | "wide",
+  viewportWidth: number,
+  containerWidth?: number,
+): { w: number; h: number } {
+  // 在封顶以下，grid 宽度是连续的 (width - gutter) / N，所以拖拽改尺寸时精确的"不变则跳过"
+  // 永远不触发，每个 rAF 帧都会重建全部 6 个 uPlot 图表。量化到步长能把一串近乎相同的宽度
+  // 收敛成一个，于是大约每步才重建一次。
+  const q = (value: number) => Math.floor(value / CHART_WIDTH_STEP) * CHART_WIDTH_STEP;
+
+  if (mode === "wide") {
+    const height =
+      viewportWidth < 720
+        ? WIDE_CHART_MOBILE_HEIGHT
+        : viewportWidth < 1024
+          ? WIDE_CHART_TABLET_HEIGHT
+          : WIDE_CHART_HEIGHT;
+    const measuredWidth =
+      typeof containerWidth === "number" && containerWidth > 0
+        ? containerWidth
+        : viewportWidth - WIDE_CHART_GUTTER;
+    return {
+      w: Math.min(WIDE_CHART_MAX_WIDTH, Math.max(WIDE_CHART_MIN_WIDTH, q(measuredWidth))),
+      h: height,
+    };
+  }
+
+  if (viewportWidth >= 1280) {
+    return {
+      w: Math.min(GRID_CHART_DESKTOP_MAX_WIDTH, q((viewportWidth - GRID_CHART_DESKTOP_GUTTER) / 3)),
+      h: GRID_CHART_HEIGHT,
+    };
+  }
+
+  if (viewportWidth >= 768) {
+    return {
+      w: Math.min(GRID_CHART_TABLET_MAX_WIDTH, q((viewportWidth - GRID_CHART_TABLET_GUTTER) / 2)),
+      h: GRID_CHART_HEIGHT,
+    };
+  }
+
+  return {
+    w: Math.max(WIDE_CHART_MIN_WIDTH - 20, q(viewportWidth - GRID_CHART_MOBILE_GUTTER)),
+    h: 136,
+  };
+}
+
 export function useResponsiveChartSize(mode: "grid" | "wide") {
-  const ref = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState(
     mode === "grid"
       ? GRID_CHART_DEFAULT
       : { w: WIDE_CHART_MAX_WIDTH, h: WIDE_CHART_HEIGHT },
   );
+  const nodeRef = useRef<HTMLDivElement | null>(null);
+  const frameRef = useRef<number | null>(null);
+  const observerRef = useRef<ResizeObserver | null>(null);
+
+  const apply = useCallback(() => {
+    const next = computeChartSize(mode, window.innerWidth, nodeRef.current?.clientWidth);
+    // 计算出的尺寸没变就跳过 setState (以及它触发的 uPlot 拆建)。
+    setSize((prev) => (prev.w === next.w && prev.h === next.h ? prev : next));
+  }, [mode]);
+
+  const scheduleApply = useCallback(() => {
+    if (frameRef.current != null) return;
+    frameRef.current = window.requestAnimationFrame(() => {
+      frameRef.current = null;
+      apply();
+    });
+  }, [apply]);
+
+  // 回调 ref：容器每次重新挂载都重新测量 + 重新 observe（修复卸载后 observer 失效、尺寸冻结）。
+  const ref = useCallback(
+    (node: HTMLDivElement | null) => {
+      observerRef.current?.disconnect();
+      observerRef.current = null;
+      nodeRef.current = node;
+      if (node) {
+        if (mode === "wide" && typeof ResizeObserver !== "undefined") {
+          const observer = new ResizeObserver(scheduleApply);
+          observer.observe(node);
+          observerRef.current = observer;
+        }
+        scheduleApply();
+      }
+    },
+    [mode, scheduleApply],
+  );
 
   useEffect(() => {
-    function computeSize(viewportWidth: number, containerWidth?: number): { w: number; h: number } {
-      // 在封顶以下，grid 宽度是连续的 (width - gutter) / N，所以拖拽改尺寸时精确的"不变则跳过"
-      // 永远不触发，每个 rAF 帧都会重建全部 6 个 uPlot 图表。量化到步长能把一串近乎相同的宽度
-      // 收敛成一个，于是大约每步才重建一次。
-      const q = (value: number) => Math.floor(value / CHART_WIDTH_STEP) * CHART_WIDTH_STEP;
-
-      if (mode === "wide") {
-        const height =
-          viewportWidth < 720
-            ? WIDE_CHART_MOBILE_HEIGHT
-            : viewportWidth < 1024
-              ? WIDE_CHART_TABLET_HEIGHT
-              : WIDE_CHART_HEIGHT;
-        const measuredWidth =
-          typeof containerWidth === "number" && containerWidth > 0
-            ? containerWidth
-            : viewportWidth - WIDE_CHART_GUTTER;
-        return {
-          w: Math.min(WIDE_CHART_MAX_WIDTH, Math.max(WIDE_CHART_MIN_WIDTH, q(measuredWidth))),
-          h: height,
-        };
-      }
-
-      if (viewportWidth >= 1280) {
-        return {
-          w: Math.min(GRID_CHART_DESKTOP_MAX_WIDTH, q((viewportWidth - GRID_CHART_DESKTOP_GUTTER) / 3)),
-          h: GRID_CHART_HEIGHT,
-        };
-      }
-
-      if (viewportWidth >= 768) {
-        return {
-          w: Math.min(GRID_CHART_TABLET_MAX_WIDTH, q((viewportWidth - GRID_CHART_TABLET_GUTTER) / 2)),
-          h: GRID_CHART_HEIGHT,
-        };
-      }
-
-      return {
-        w: Math.max(WIDE_CHART_MIN_WIDTH - 20, q(viewportWidth - GRID_CHART_MOBILE_GUTTER)),
-        h: 136,
-      };
-    }
-
-    function apply() {
-      const next = computeSize(window.innerWidth, ref.current?.clientWidth);
-      // 计算出的尺寸没变就跳过 setState (以及它触发的 uPlot 拆建)——resize 触发频率远高于
-      // 按断点分桶的尺寸真正变化的频率。
-      setSize((prev) => (prev.w === next.w && prev.h === next.h ? prev : next));
-    }
-
-    let frame: number | null = null;
-    function onResize() {
-      if (frame != null) return;
-      frame = window.requestAnimationFrame(() => {
-        frame = null;
-        apply();
-      });
-    }
-
     apply();
-    window.addEventListener("resize", onResize);
-    const observer =
-      mode === "wide" && typeof ResizeObserver !== "undefined"
-        ? new ResizeObserver(onResize)
-        : null;
-    if (observer && ref.current) {
-      observer.observe(ref.current);
-    }
+    window.addEventListener("resize", scheduleApply);
     return () => {
-      if (frame != null) window.cancelAnimationFrame(frame);
-      window.removeEventListener("resize", onResize);
-      observer?.disconnect();
+      window.removeEventListener("resize", scheduleApply);
+      observerRef.current?.disconnect();
+      if (frameRef.current != null) window.cancelAnimationFrame(frameRef.current);
     };
-  }, [mode]);
+  }, [apply, scheduleApply]);
 
   return { ...size, ref };
 }

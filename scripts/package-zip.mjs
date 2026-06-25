@@ -1,4 +1,4 @@
-// Packages komaritheme-vX.Y.Z.zip ready for `komari-theme.json` + `preview.png` + `dist/` drop-in.
+// Packages Komari-Theme-LuminaPlus-vX.Y.Z.zip ready for `komari-theme.json` + `preview.png` + `dist/` drop-in.
 // Uses Node's builtin zlib via a minimal zip stream (no external deps).
 
 import { createWriteStream, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
@@ -10,8 +10,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
 const manifest = JSON.parse(readFileSync(resolve(root, "komari-theme.json"), "utf8"));
 const version = manifest.version ?? "0.0.0";
-const short = manifest.short ?? "komaritheme";
-const outPath = resolve(root, `${short}-v${version}.zip`);
+const packageName = manifest.name ?? "Komari-Theme-LuminaPlus";
+const outPath = resolve(root, `${packageName}-v${version}.zip`);
 
 function crc32(buf) {
   const table = new Uint32Array(256);

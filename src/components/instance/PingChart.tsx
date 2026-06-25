@@ -16,7 +16,9 @@ import {
 import {
   cutPeakValues,
   detectTypicalIntervalSeconds,
+  downsampleAligned,
   insertMetricGapSentinels,
+  smoothByCount,
 } from "./chartData";
 import { latencyHeatColor, lossHeatColor } from "@/utils/metricTone";
 import { usePreferences } from "@/hooks/usePreferences";
@@ -35,6 +37,12 @@ function percentileFromSorted(sorted: number[], ratio: number) {
   return sorted[lower] + (sorted[upper] - sorted[lower]) * weight;
 }
 
+// 渲染前先按时间分桶降采样到这么多点（避免 uPlot 抽稀尖刺），再做按点数的滑动平均磨平。
+// 降采样后各时段点数一致，用固定点窗能让 1h/4h/1d 平滑度统一。点窗调大 → 更平滑。
+const MAX_RENDER_POINTS = 160;
+const SMOOTH_WINDOW_POINTS = 7; // 默认轻度平滑
+const SMOOTH_WINDOW_POINTS_PEAK = 13; // “削峰平滑”开启时更强
+
 export function PingChart({
   uuid,
   hours,
@@ -44,7 +52,7 @@ export function PingChart({
   hours: number;
   active?: boolean;
 }) {
-  const { data, isLoading, refetch } = usePingRecords(uuid, hours, active);
+  const { data, isLoading, refetch, dataUpdatedAt } = usePingRecords(uuid, hours, active);
   const { resolvedAppearance } = usePreferences();
   const { w, h, ref: chartSizeRef } = useResponsiveChartSize("wide");
   const [hiddenTasks, setHiddenTasks] = useState<Set<number>>(new Set());
@@ -75,7 +83,7 @@ export function PingChart({
     );
   }, [tasks]);
   const taskColors = useMemo(
-    () => new Map(tasks.map((task, index) => [task.id, colorForSeries(index)] as const)),
+    () => new Map(tasks.map((task, index) => [task.id, colorForSeries(index, tasks.length)] as const)),
     [tasks],
   );
   const taskKeySet = useMemo(() => new Set(tasks.map((task) => String(task.id))), [tasks]);
@@ -158,7 +166,14 @@ export function PingChart({
       chartPoints.map((point) => point[taskKey]),
     );
 
-    return [times, ...perTask] as uPlot.AlignedData;
+    const reduced = downsampleAligned(times, perTask, MAX_RENDER_POINTS);
+    // 始终做轻度按点滑动平均消抖（各时段一致）；“削峰平滑”开启时点窗加大（并已在前面叠加 cutPeakValues 削峰）。
+    const smoothed = smoothByCount(
+      reduced.perTask,
+      cutPeak ? SMOOTH_WINDOW_POINTS_PEAK : SMOOTH_WINDOW_POINTS,
+    );
+
+    return [reduced.times, ...smoothed] as uPlot.AlignedData;
   }, [cutPeak, data, taskKeySet, taskKeys, tasks]);
 
   useEffect(() => {
@@ -203,15 +218,27 @@ export function PingChart({
       estimatedWidth: 196,
       setTooltip,
       buildRows: (idx) =>
-        visibleTasks.map((task) => {
-          const taskIndex = taskIndexById.get(task.id) ?? 0;
-          const value = chartRef.current[taskIndex + 1]?.[idx] as number | null | undefined;
-          return {
-            label: taskLabels.get(task.id) ?? `任务 #${task.id}`,
-            value: value == null ? "—" : `${value.toFixed(1)} ms`,
-            color: taskColors.get(task.id) ?? colorForSeries(taskIndex),
-          };
-        }),
+        visibleTasks
+          .map((task) => {
+            const taskIndex = taskIndexById.get(task.id) ?? 0;
+            const raw = chartRef.current[taskIndex + 1]?.[idx] as number | null | undefined;
+            return {
+              label: taskLabels.get(task.id) ?? `任务 #${task.id}`,
+              raw: typeof raw === "number" && Number.isFinite(raw) ? raw : null,
+              color: taskColors.get(task.id) ?? colorForSeries(taskIndex, tasks.length),
+            };
+          })
+          // 按当前点的延迟从高到低排序，与图上线条自上而下的视觉顺序一致；无数据(—)沉底。
+          .sort((a, b) => {
+            if (a.raw == null) return b.raw == null ? 0 : 1;
+            if (b.raw == null) return -1;
+            return b.raw - a.raw;
+          })
+          .map(({ label, raw, color }) => ({
+            label,
+            value: raw == null ? "—" : `${raw.toFixed(1)} ms`,
+            color,
+          })),
     });
     return {
       padding: [10, 14, 12, 2],
@@ -241,7 +268,7 @@ export function PingChart({
         { label: "time" },
         ...tasks.map((task, index) => ({
           label: taskLabels.get(task.id) ?? `任务 #${task.id}`,
-          stroke: taskColors.get(task.id) ?? colorForSeries(index),
+          stroke: taskColors.get(task.id) ?? colorForSeries(index, tasks.length),
           width: 1.7,
           spanGaps: connectNulls,
           show: !hiddenTasks.has(task.id),
@@ -303,7 +330,7 @@ export function PingChart({
         total,
         lost,
         loss,
-        color: taskColors.get(task.id) ?? colorForSeries(index),
+        color: taskColors.get(task.id) ?? colorForSeries(index, tasks.length),
       };
     });
   }, [data, taskColors, tasks]);
@@ -358,6 +385,7 @@ export function PingChart({
           data-active={connectNulls ? "true" : "false"}
           onClick={() => setConnectNulls((value) => !value)}
           aria-pressed={connectNulls}
+          title="关闭：如实显示中断/丢包断点；开启：跨过所有空缺连成完整曲线（更好看，但看不出掉线）。注：偶尔漏一两次采样的小空缺始终自动桥接，不受此开关影响。"
         >
           <span className="instance-switch-copy">断点连线</span>
           <span className="instance-switch-track" aria-hidden>
@@ -389,29 +417,27 @@ export function PingChart({
               aria-pressed={visible}
               onClick={() => toggleTask(task.id)}
               style={{ borderColor: visible ? task.color : "var(--border-subtle)" }}
-              title={`最小 ${task.min != null ? `${task.min.toFixed(1)} ms` : "—"} | 最大 ${task.max != null ? `${task.max.toFixed(1)} ms` : "—"} | 样本 ${task.total ?? 0} | 间隔 ${task.interval}s`}
+              title={[
+                taskLabels.get(task.id) ?? `任务 #${task.id}`,
+                `当前 ${task.latest != null ? `${task.latest.toFixed(1)} ms` : "—"} | 均值 ${task.avg != null ? `${task.avg.toFixed(1)} ms` : "—"} | 丢包 ${task.loss.toFixed(1)}%`,
+                `p99 ${task.p99 != null ? `${task.p99.toFixed(0)} ms` : "—"} | 抖动 ${task.volatility != null ? task.volatility.toFixed(2) : "—"}`,
+                `min ${task.min != null ? `${task.min.toFixed(0)} ms` : "—"} | max ${task.max != null ? `${task.max.toFixed(0)} ms` : "—"} | 样本 ${task.total ?? 0} | 间隔 ${task.interval}s`,
+              ].join("\n")}
             >
-              <div className="instance-ping-task-head">
-                <span className="instance-ping-task-name">{taskLabels.get(task.id) ?? `任务 #${task.id}`}</span>
-                <span
-                  className="instance-ping-task-primary"
-                  style={{ color: task.latest != null ? latencyHeatColor(task.latest) : "var(--text-tertiary)" }}
-                >
-                  {task.latest != null ? `${task.latest.toFixed(1)} ms` : "—"}
-                </span>
-              </div>
-              <div className="instance-ping-task-stats">
-                <span>均值 {task.avg != null ? `${task.avg.toFixed(1)} ms` : "—"}</span>
-                <span style={{ color: lossHeatColor(task.loss) }}>丢包 {task.loss.toFixed(1)}%</span>
-                <span>p99 {task.p99 != null ? `${task.p99.toFixed(0)} ms` : "—"}</span>
-                <span>抖动 {task.volatility != null ? task.volatility.toFixed(2) : "—"}</span>
-              </div>
-              <div className="instance-ping-task-meta">
-                <span>min {task.min != null ? `${task.min.toFixed(0)} ms` : "—"}</span>
-                <span>max {task.max != null ? `${task.max.toFixed(0)} ms` : "—"}</span>
-                <span>样本 {task.total ?? 0}</span>
-                <span>{task.interval}s</span>
-              </div>
+              <span className="instance-ping-task-dot" style={{ background: task.color }} aria-hidden />
+              <span className="instance-ping-task-name">{taskLabels.get(task.id) ?? `任务 #${task.id}`}</span>
+              <span
+                className="instance-ping-task-primary"
+                style={{ color: task.latest != null ? latencyHeatColor(task.latest) : "var(--text-tertiary)" }}
+              >
+                {task.latest != null ? `${task.latest.toFixed(1)} ms` : "—"}
+              </span>
+              <span
+                className="instance-ping-task-loss"
+                style={{ color: task.loss > 0 ? lossHeatColor(task.loss) : "var(--text-tertiary)" }}
+              >
+                {task.loss.toFixed(1)}%
+              </span>
             </button>
           );
         })}
@@ -424,7 +450,7 @@ export function PingChart({
               // 把 cutPeak/connectNulls 纳入 key:这两个 toggle 改了数据与 y 轴 range,
               // 复用同一 uPlot 实例(resetScales=false)时会卡成空白且关掉也不恢复;
               // 改变 key 强制重建一个干净实例,开关都能正确重绘。
-              key={`${uuid}-${hours}-${cutPeak ? "smooth" : "raw"}-${connectNulls ? "span" : "gap"}`}
+              key={`${uuid}-${hours}-${cutPeak ? "smooth" : "raw"}-${connectNulls ? "span" : "gap"}-${dataUpdatedAt}`}
               options={options}
               data={chart}
               resetScales={false}

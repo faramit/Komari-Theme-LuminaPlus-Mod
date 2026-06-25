@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   cutPeakValues,
+  downsampleAligned,
   fillMissingMetricPoints,
   insertMetricGapSentinels,
   type TimedMetricPoint,
@@ -122,6 +123,32 @@ describe("insertMetricGapSentinels — three-state ping semantics", () => {
     expect(out.every((point) => point.A !== null)).toBe(true);
   });
 
+  it("bridges up to two consecutive missed samples (gap <= 3x interval)", () => {
+    // 连续漏两次采样 → 空缺正好 3 倍 interval，仍视为抖动/漏采而非中断，保持可跨过(不插 null)。
+    const points: TimedMetricPoint[] = [
+      { time: 0, A: 10 },
+      { time: 180, A: 13 }, // 60、120 两处漏采 → 空缺 = 3 倍 interval
+      { time: 240, A: 14 },
+    ];
+
+    const out = insertMetricGapSentinels(points, opts({ A: 60 }));
+
+    expect(out.every((point) => point.A !== null)).toBe(true);
+  });
+
+  it("breaks once the gap exceeds 3x interval", () => {
+    // 空缺 = 4 倍 interval → 真实较长中断，必须插 null 断点。
+    const points: TimedMetricPoint[] = [
+      { time: 0, A: 10 },
+      { time: 240, A: 14 }, // 60、120、180 三处漏采 → 空缺 = 4 倍 interval
+      { time: 300, A: 15 },
+    ];
+
+    const out = insertMetricGapSentinels(points, opts({ A: 60 }));
+
+    expect(out.some((point) => point.A === null)).toBe(true);
+  });
+
   it("breaks only the gapped task on a long outage, sparing co-located anchors", () => {
     // A 在 60..300 间中断，而 B 持续采样。A 的断点必须落到 B 的 anchor 上 (合并而非跳过)，
     // 且不能破坏 B 的真实值。
@@ -156,5 +183,30 @@ describe("insertMetricGapSentinels — three-state ping semantics", () => {
     expect(p120).toBeDefined();
     expect(p120!.A).toBeNull();
     expect(p120!.B).toBeNull();
+  });
+});
+
+describe("downsampleAligned", () => {
+  it("keeps a real null break even when the same bucket also contains numeric samples", () => {
+    const out = downsampleAligned(
+      [0, 10, 20, 30],
+      [[10, null, 14, 16]],
+      2,
+    );
+
+    expect(out.times).toHaveLength(2);
+    expect(out.perTask[0][0]).toBeNull();
+    expect(out.perTask[0][1]).toBe(15);
+  });
+
+  it("keeps off-phase-only buckets undefined", () => {
+    const out = downsampleAligned(
+      [0, 10, 20, 30],
+      [[undefined, undefined, 14, 16]],
+      2,
+    );
+
+    expect(out.perTask[0][0]).toBeUndefined();
+    expect(out.perTask[0][1]).toBe(15);
   });
 });

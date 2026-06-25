@@ -12,7 +12,7 @@ import {
 import { usePublicConfig } from "@/hooks/usePublicConfig";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 
-const DEFAULT_PING_HOURS = 24;
+const DEFAULT_PING_HOURS = 4;
 
 export function Instance() {
   const { uuid } = useParams<{ uuid: string }>();

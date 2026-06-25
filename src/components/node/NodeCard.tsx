@@ -19,9 +19,7 @@ import {
 import { useNodeCardModel } from "@/hooks/useNodeCardModel";
 import { usePreferences } from "@/hooks/usePreferences";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
-import {
-  formatBytes,
-} from "@/utils/format";
+import { formatBytes } from "@/utils/format";
 import {
   latencyHeatColor,
   lossHeatColor,
@@ -109,7 +107,6 @@ export const NodeCard = memo(function NodeCard({
       className={clsx("server-card", isOffline && "is-offline")}
       data-appearance={resolvedAppearance}
     >
-
       <div className="server-card-content">
         <NodeCardHeader node={node} subtitle={subtitle} osName={osName} />
 
@@ -664,14 +661,19 @@ function TrafficStat({
       </div>
       <div className="traffic-stat-trend" aria-hidden>
         <TrafficDotStrip samples={samples} color={speedColor} redrawKey={redrawKey} />
-        <span className="traffic-stat-live" data-live={live ? "true" : "false"}>
+        <span
+          className="traffic-stat-live"
+          data-live={live ? "true" : "false"}
+          title={live ? (active ? "实时" : "空闲") : "离线"}
+          aria-label={live ? (active ? "实时" : "空闲") : "离线"}
+        >
           <span
             className="traffic-stat-live-dot"
             style={{
               background: speedColor,
             }}
           />
-          <span>{live ? (active ? "实时" : "空闲") : "离线"}</span>
+          {live && <span>{active ? "实时" : "空闲"}</span>}
         </span>
       </div>
       <div className="traffic-stat-foot">

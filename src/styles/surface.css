@@ -1,4 +1,4 @@
-/* komaritheme 共享表面样式 */
+/* LuminaPlus 共享表面样式 */
 
 /* 固定的全视口背景图,画在 body::before 上以便首帧即存在(index.html 内联脚本在 React
    挂载前就注入这些变量,避免不透明→玻璃的闪烁)。位于 body 的 --bg-0 兜底之上、#root 内容
@@ -428,7 +428,7 @@ body::after {
   border: 1px solid var(--border);
   border-radius: 20px;
   box-shadow: var(--shadow-card);
-  padding: 20px;
+  padding: 16px;
 }
 
 .instance-panel-header {
@@ -436,7 +436,7 @@ body::after {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .instance-panel-headings {
@@ -609,7 +609,7 @@ body::after {
 .instance-info-groups {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  gap: 10px;
 }
 
 .instance-info-group {
@@ -617,11 +617,11 @@ body::after {
   border: 1px solid var(--border-subtle);
   border-radius: 16px;
   background: color-mix(in srgb, var(--surface-elev) 92%, transparent);
-  padding: 12px 14px;
+  padding: 9px 12px;
 }
 
 .instance-info-group-title {
-  margin-bottom: 10px;
+  margin-bottom: 6px;
   color: var(--text-primary);
   font-size: 12px;
   font-weight: 700;
@@ -630,7 +630,11 @@ body::after {
 
 .instance-info-item {
   min-width: 0;
-  padding: 9px 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
   border-bottom: 1px solid var(--hairline);
 }
 
@@ -639,24 +643,36 @@ body::after {
 }
 
 .instance-info-label {
-  display: block;
-  margin-bottom: 4px;
+  flex: 0 0 auto;
   color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   letter-spacing: 0.02em;
 }
 
 .instance-info-value {
+  min-width: 0;
+  text-align: right;
   color: var(--text-primary);
-  font-size: 12.5px;
-  font-weight: 600;
-  line-height: 1.45;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
   word-break: break-word;
 }
 
+/* 流量项带进度条，保留竖排 */
+.instance-info-item.is-stack {
+  display: block;
+}
+
+.instance-info-item.is-stack .instance-info-label {
+  display: block;
+  margin-bottom: 3px;
+}
+
 .instance-info-item.is-stack .instance-info-value {
-  margin-bottom: 7px;
+  text-align: left;
+  margin-bottom: 6px;
 }
 
 .instance-info-traffic {
@@ -754,9 +770,11 @@ body::after {
 
 .instance-chart-controls {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
+  gap: 10px;
 }
 
 .instance-chart-stage {
@@ -895,6 +913,19 @@ body::after {
   font-weight: 700;
 }
 
+/* 把覆盖/采样/断点连线/实时并入标题行右侧，省掉单独一行工具栏 */
+.instance-chart-headmeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.instance-chart-panel .instance-panel-header {
+  align-items: center;
+}
+
 .instance-chart-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -907,7 +938,7 @@ body::after {
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--border-subtle) 88%, var(--chart-accent, var(--progress-cpu)) 12%);
   border-radius: 16px;
-  padding: 14px;
+  padding: 11px 12px;
   background:
     linear-gradient(
       180deg,
@@ -946,8 +977,8 @@ body::after {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  min-height: 48px;
-  margin-bottom: 8px;
+  min-height: 38px;
+  margin-bottom: 6px;
 }
 
 .instance-chart-card .instance-panel-subhead svg {
@@ -974,6 +1005,26 @@ body::after {
 
 .instance-uplot-wrap.is-large {
   margin-top: 16px;
+}
+
+/* 折线入场：从左到右扫出，模拟逐渐画出（canvas 没法逐条 path 动画，用整体揭示近似） */
+.instance-uplot-wrap .uplot {
+  animation: chart-reveal 0.7s ease-out;
+}
+
+@keyframes chart-reveal {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .instance-uplot-wrap .uplot {
+    animation: none;
+  }
 }
 
 .instance-chart-tooltip {
@@ -1037,59 +1088,51 @@ body::after {
 }
 
 .instance-ping-task {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: min(100%, 244px);
-  padding: 11px 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 5px 11px;
   border: 1px solid var(--border-subtle);
-  border-radius: 14px;
+  border-radius: 999px;
   background: color-mix(in srgb, var(--surface-elev) 92%, transparent);
   color: var(--text-primary);
   font-size: 12px;
   font-weight: 600;
   text-align: left;
+  white-space: nowrap;
   transition: opacity 160ms ease, background 160ms ease, border-color 160ms ease;
 }
 
-.instance-ping-task-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
+.instance-ping-task-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
 }
 
 .instance-ping-task-name {
   min-width: 0;
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.35;
 }
 
 .instance-ping-task-primary {
   flex: 0 0 auto;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
 
-.instance-ping-task-stats,
-.instance-ping-task-meta {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px 10px;
-  color: var(--text-secondary);
+.instance-ping-task-loss {
+  flex: 0 0 auto;
   font-size: 11px;
-  font-weight: 550;
-}
-
-.instance-ping-task-meta {
-  color: var(--text-tertiary);
-  font-size: 10px;
+  font-weight: 600;
 }
 
 .instance-ping-task[data-visible="false"] {
-  opacity: 0.45;
+  opacity: 0.4;
 }
 
 .instance-loss-stack {
@@ -1241,20 +1284,7 @@ body::after {
   }
 
   .instance-ping-tasks {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 10px;
-  }
-
-  .instance-ping-task {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .instance-ping-task-head {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 4px;
+    gap: 6px;
   }
 
 }

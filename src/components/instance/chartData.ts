@@ -9,6 +9,9 @@ export type TimedMetricPoint = {
 // 每个检测到的 gap 最多插入的 null 标记点数上限，避免长时间中断把对齐数组撑成上千个点。
 const MAX_SENTINELS_PER_GAP = 6;
 
+// 空缺超过「周期 × 此倍数」才算真实中断插 null 断点；更小的空缺留给 uPlot 跨过，避免漏采把线切碎。
+const GAP_BREAK_INTERVAL_MULTIPLIER = 3;
+
 // 在升序 `times` 上二分查找与 `target` 相差在 `tolerance` 内的下标，没有则返回 -1。
 // 用于把断点 null 合并到已有的他 task anchor 上，而不是新建一个近重复列。
 function findPointNearTime(times: number[], target: number, tolerance: number) {
@@ -180,9 +183,7 @@ export function insertMetricGapSentinels(
     if (!Number.isFinite(interval) || interval <= 0) continue;
 
     const tolerance = Math.max(1, interval * toleranceRatio);
-    // 只有空缺超过约 2 个采样 interval 才当真实断点，免得单次抖动/漏发的 ping 把线切碎；
-    // 更小的空缺交给 uPlot 当 off-phase (undefined) 列跨过。
-    const breakThreshold = interval * 2;
+    const breakThreshold = interval * GAP_BREAK_INTERVAL_MULTIPLIER;
     for (let index = 1; index < validTimes.length; index += 1) {
       const previous = validTimes[index - 1];
       const current = validTimes[index];
@@ -361,4 +362,95 @@ export function cutPeakValues<T extends { [key: string]: any }>(
   }
 
   return result;
+}
+
+// 按时间等宽分桶降采样，桶内对每条探测点的样本取均值：降到 uPlot 抽稀阈值以下避免尖刺。
+// 三态保留：任何 null→null（断点优先，避免丢包被均值吞掉），有值→均值，全 off-phase→undefined。
+export function downsampleAligned(
+  times: number[],
+  perTask: Array<Array<number | null | undefined>>,
+  maxPoints: number,
+): { times: number[]; perTask: Array<Array<number | null | undefined>> } {
+  const length = times.length;
+  if (length <= maxPoints || maxPoints <= 0) return { times, perTask };
+
+  const min = times[0];
+  const max = times[length - 1];
+  const span = max - min;
+  if (!(span > 0)) return { times, perTask };
+  const bucketDuration = span / maxPoints;
+
+  const seriesCount = perTask.length;
+  const timeSum = new Array<number>(maxPoints).fill(0);
+  const timeCount = new Array<number>(maxPoints).fill(0);
+  const valueSum = perTask.map(() => new Array<number>(maxPoints).fill(0));
+  const valueCount = perTask.map(() => new Array<number>(maxPoints).fill(0));
+  const nullCount = perTask.map(() => new Array<number>(maxPoints).fill(0));
+
+  for (let i = 0; i < length; i += 1) {
+    let bucket = Math.floor((times[i] - min) / bucketDuration);
+    if (bucket < 0) bucket = 0;
+    else if (bucket >= maxPoints) bucket = maxPoints - 1;
+    timeSum[bucket] += times[i];
+    timeCount[bucket] += 1;
+    for (let s = 0; s < seriesCount; s += 1) {
+      const value = perTask[s][i];
+      if (typeof value === "number" && Number.isFinite(value)) {
+        valueSum[s][bucket] += value;
+        valueCount[s][bucket] += 1;
+      } else if (value === null) {
+        nullCount[s][bucket] += 1;
+      }
+    }
+  }
+
+  const outTimes: number[] = [];
+  const outPerTask: Array<Array<number | null | undefined>> = perTask.map(() => []);
+  for (let bucket = 0; bucket < maxPoints; bucket += 1) {
+    if (timeCount[bucket] === 0) continue; // 跳过没有任何样本的空桶
+    outTimes.push(timeSum[bucket] / timeCount[bucket]);
+    for (let s = 0; s < seriesCount; s += 1) {
+      outPerTask[s].push(
+        nullCount[s][bucket] > 0
+          ? null
+          : valueCount[s][bucket] > 0
+            ? valueSum[s][bucket] / valueCount[s][bucket]
+            : undefined,
+      );
+    }
+  }
+
+  return { times: outTimes, perTask: outPerTask };
+}
+
+// 按点数的滑动平均：每个数值点取前后各 floor(window/2) 个点取均值。降采样后各时段点数一致，
+// 用固定点窗能让 1h/4h/1d 获得一致的平滑度（按时间窗会因每点时间跨度不同而力度不均）。
+// null/undefined（断点/off-phase）原样保留。
+export function smoothByCount(
+  perTask: Array<Array<number | null | undefined>>,
+  windowPoints: number,
+): Array<Array<number | null | undefined>> {
+  if (windowPoints <= 1) return perTask;
+  const half = Math.floor(windowPoints / 2);
+  return perTask.map((series) => {
+    const out = series.slice();
+    const n = series.length;
+    for (let i = 0; i < n; i += 1) {
+      const value = series[i];
+      if (typeof value !== "number" || !Number.isFinite(value)) continue;
+      const start = Math.max(0, i - half);
+      const end = Math.min(n - 1, i + half);
+      let sum = 0;
+      let count = 0;
+      for (let j = start; j <= end; j += 1) {
+        const neighbor = series[j];
+        if (typeof neighbor === "number" && Number.isFinite(neighbor)) {
+          sum += neighbor;
+          count += 1;
+        }
+      }
+      if (count > 0) out[i] = sum / count;
+    }
+    return out;
+  });
 }
