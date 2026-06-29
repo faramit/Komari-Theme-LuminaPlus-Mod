@@ -72,7 +72,7 @@ export function InstanceDetails({
           <InfoRow label="架构" value={meta.arch || "—"} />
           <InfoRow label="虚拟化" value={meta.virtualization || "—"} />
           <InfoRow label="显卡" value={meta.gpu_name || "—"} />
-          <InfoRow label="操作系统" value={meta.os || "—"} />
+          <InfoRow label="操作系统" value={[meta.os, meta.kernel_version].filter(Boolean).join(" ") || "—"} />
         </div>
 
         <div className="instance-info-group">

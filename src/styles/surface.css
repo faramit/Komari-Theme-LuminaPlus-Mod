@@ -43,6 +43,69 @@ body::after {
   pointer-events: none;
 }
 
+/* 默认背景:深色模式使用 Abyssal Archive 多层纹理,浅色模式为纯白纸色。
+   当用户配置自定义背景图时,body::before(fixed,z-index:-2)绘制在 body 背景之上覆盖它们。 */
+:root[data-appearance="dark"] body {
+  background-color: #020f0f;
+  /* PNG-only fallback for browsers without CSS image-set() */
+  background-image:
+    linear-gradient(rgba(255, 230, 203, 0.01), rgba(255, 230, 203, 0.01)),
+    url("/assets/abyssal/grain.png"),
+    url("/assets/abyssal/specks.png"),
+    linear-gradient(90deg, rgba(2, 15, 15, 0.14), rgba(4, 28, 28, 0.06) 48%, rgba(2, 15, 15, 0.12)),
+    url("/assets/abyssal/veil-top.png"),
+    radial-gradient(circle at 62% 26%, rgba(255, 230, 203, 0.04), transparent 32rem),
+    url("/assets/abyssal/veil-mid.png"),
+    url("/assets/abyssal/veil-deep.png"),
+    linear-gradient(180deg, rgba(2, 15, 15, 0.38), rgba(4, 28, 28, 0.72)),
+    linear-gradient(90deg, rgba(2, 15, 15, 0.68), rgba(4, 28, 28, 0.16) 52%, rgba(2, 15, 15, 0.86));
+  /* Modern AVIF/WebP via image-set() */
+  background-image:
+    linear-gradient(rgba(255, 230, 203, 0.01), rgba(255, 230, 203, 0.01)),
+    url("/assets/abyssal/grain.png"),
+    image-set(url("/assets/abyssal/specks.avif") type("image/avif"), url("/assets/abyssal/specks.webp") type("image/webp"), url("/assets/abyssal/specks.png")),
+    linear-gradient(90deg, rgba(2, 15, 15, 0.14), rgba(4, 28, 28, 0.06) 48%, rgba(2, 15, 15, 0.12)),
+    image-set(url("/assets/abyssal/veil-top.avif") type("image/avif"), url("/assets/abyssal/veil-top.webp") type("image/webp"), url("/assets/abyssal/veil-top.png")),
+    radial-gradient(circle at 62% 26%, rgba(255, 230, 203, 0.04), transparent 32rem),
+    image-set(url("/assets/abyssal/veil-mid.avif") type("image/avif"), url("/assets/abyssal/veil-mid.webp") type("image/webp"), url("/assets/abyssal/veil-mid.png")),
+    image-set(url("/assets/abyssal/veil-deep.avif") type("image/avif"), url("/assets/abyssal/veil-deep.webp") type("image/webp"), url("/assets/abyssal/veil-deep.png")),
+    linear-gradient(180deg, rgba(2, 15, 15, 0.38), rgba(4, 28, 28, 0.72)),
+    linear-gradient(90deg, rgba(2, 15, 15, 0.68), rgba(4, 28, 28, 0.16) 52%, rgba(2, 15, 15, 0.86));
+  background-position: center, left top, left top, center, calc(100% + 1rem) 5rem, 62% 26%, -5rem 102rem, calc(100% + 2rem) 98rem, center top, center;
+  background-size: auto, 384px 384px, 768px 768px, cover, min(82rem, 112vw) auto, cover, min(68rem, 94vw) auto, min(74rem, 102vw) auto, cover, cover;
+  background-repeat: repeat, repeat, repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
+  background-attachment: scroll;
+  background-blend-mode: normal, normal, screen, normal, soft-light, screen, screen, screen, normal, normal;
+}
+
+:root[data-appearance="light"] body {
+  background-color: var(--bg-0);
+  background-image:
+    linear-gradient(rgba(0, 79, 115, 0.018), rgba(0, 79, 115, 0.018)),
+    url("/assets/abyssal/grain.png"),
+    radial-gradient(circle at 18% 12%, rgba(0, 79, 115, 0.055), transparent 22rem),
+    radial-gradient(circle at 78% 30%, rgba(0, 79, 115, 0.042), transparent 28rem),
+    linear-gradient(180deg, #fdfdf8 0%, #f5f8f2 100%);
+  background-position: center, left top, 18% 12%, 78% 30%, center;
+  background-size: auto, 384px 384px, cover, cover, cover;
+  background-repeat: repeat, repeat, no-repeat, no-repeat, no-repeat;
+  background-blend-mode: normal, multiply, multiply, multiply, normal;
+}
+
+@media (max-width: 640px) {
+  :root[data-appearance="light"] body {
+    background-image:
+      linear-gradient(rgba(0, 79, 115, 0.018), rgba(0, 79, 115, 0.018)),
+      url("/assets/abyssal/grain.png"),
+      radial-gradient(circle at 18% 8%, rgba(0, 79, 115, 0.052), transparent 18rem),
+      linear-gradient(180deg, #fdfdf8 0%, #f5f8f2 100%);
+    background-position: center, left top, 18% 8%, center;
+background-size: auto, 288px 288px, cover, cover;
+  background-repeat: repeat, repeat, no-repeat, no-repeat;
+  background-blend-mode: normal, multiply, multiply, normal;
+  }
+}
+
 /* 主要浮层表面的磨砂玻璃——仅在 [data-bg-glass] 下生效,该属性由背景层在卡片不透明度
    低于玻璃阈值时设置。把开销较大的 backdrop-filter 关在这道门后,默认的纯色主题就不必为它付出代价。 */
 [data-bg-glass] .server-card,
@@ -537,10 +600,14 @@ body::after {
 .instance-panel {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--surface-a) 99%, white 1%) 0%, var(--surface-a) 100%);
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, var(--border) calc(var(--surface-alpha) * 1%), transparent);
   border-radius: 20px;
   box-shadow: var(--shadow-card);
   padding: 16px;
+}
+
+.instance-panel:hover {
+  border-color: var(--border);
 }
 
 .instance-panel-header {
@@ -1055,26 +1122,6 @@ body::after {
 
 .instance-uplot-wrap.is-large {
   margin-top: 16px;
-}
-
-/* 折线入场：从左到右扫出，模拟逐渐画出（canvas 没法逐条 path 动画，用整体揭示近似） */
-.instance-uplot-wrap .uplot {
-  animation: chart-reveal 0.7s ease-out;
-}
-
-@keyframes chart-reveal {
-  from {
-    clip-path: inset(0 100% 0 0);
-  }
-  to {
-    clip-path: inset(0 0 0 0);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .instance-uplot-wrap .uplot {
-    animation: none;
-  }
 }
 
 .instance-chart-tooltip {

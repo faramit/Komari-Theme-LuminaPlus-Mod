@@ -64,7 +64,7 @@
         document.documentElement.dataset.appearance = resolved;
         document.documentElement.style.colorScheme = resolved;
         const meta = document.querySelector('meta[name="theme-color"]');
-        if (meta) meta.content = resolved === "dark" ? "#000000" : "#F5F5F7";
+        if (meta) meta.content = resolved === "dark" ? "#020f0f" : "#fbfbf6";
 
         // Apply the cached custom background + card transparency before first
         // paint so a refresh doesn't flash the solid theme before React mounts.

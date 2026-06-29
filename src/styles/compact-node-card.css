@@ -12,7 +12,7 @@
   flex-direction: column;
   gap: 10px;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) calc(var(--surface-alpha) * 0.84%), transparent);
   border-radius: 18px;
   background:
     linear-gradient(
@@ -26,6 +26,10 @@
   transition:
     transform 180ms cubic-bezier(0.32, 0.72, 0, 1),
     border-color 160ms ease;
+}
+
+.compact-node-card:hover {
+  border-color: color-mix(in srgb, var(--border-strong) 72%, var(--border));
 }
 
 .compact-node-card::before {

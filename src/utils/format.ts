@@ -136,7 +136,11 @@ export function getExpireDaysRemaining(
 ): number | null {
   const ts = resolveExpireTimestamp(iso);
   if (ts == null) return null;
-  return Math.floor((ts - Date.now()) / 86400000);
+  const expire = new Date(ts);
+  const now = new Date();
+  const expireDay = new Date(expire.getFullYear(), expire.getMonth(), expire.getDate());
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.floor((expireDay.getTime() - today.getTime()) / 86400000);
 }
 
 function resolveExpireTone(days: number | null | undefined): ExpireTone {

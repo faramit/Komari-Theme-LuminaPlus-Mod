@@ -5,28 +5,28 @@
    重新声明 token、把写在 <html> 上的自定义配色覆盖给“盖住”（大卡文字/图标曾因此不生效）。 */
 :root,
 :root[data-appearance="light"] {
-  --bg-0: #f4f4f5;
+  --bg-0: #fbfbf6;
 
-  --surface: #ffffff;
-  --surface-elev: #ffffff;
-  --surface-sunken: #f4f4f5;
+  --surface: #fbfbf6;
+  --surface-elev: #f6f9f4;
+  --surface-sunken: #f4f7f3;
 
-  --border: rgba(24, 24, 27, 0.08);
-  --border-subtle: rgba(24, 24, 27, 0.06);
-  --border-strong: rgba(24, 24, 27, 0.13);
-  --hairline: rgba(24, 24, 27, 0.08);
+  --border: rgba(0, 79, 115, 0.28);
+  --border-subtle: rgba(0, 79, 115, 0.18);
+  --border-strong: rgba(0, 79, 115, 0.46);
+  --hairline: rgba(0, 79, 115, 0.10);
 
-  --text-primary: #18181b;
-  --text-secondary: #52525b;
-  --text-tertiary: #71717a;
-  --text-on-strong: #ffffff;
+  --text-primary: #004f73;
+  --text-secondary: rgba(0, 79, 115, 0.68);
+  --text-tertiary: rgba(0, 79, 115, 0.43);
+  --text-on-strong: #fbfbf6;
 
-  --fill-secondary: rgba(24, 24, 27, 0.1);
-  --fill-tertiary: rgba(24, 24, 27, 0.05);
+  --fill-secondary: rgba(0, 79, 115, 0.1);
+  --fill-tertiary: rgba(0, 79, 115, 0.05);
 
-  --hover-bg: #f4f4f5;
+  --hover-bg: #edf5f3;
 
-  --progress-bg: #e4e4e7;
+  --progress-bg: rgba(0, 79, 115, 0.08);
   --progress-cpu: #3b82f6;
   --progress-memory: #8b5cf6;
   --progress-swap: #6366f1;
@@ -81,35 +81,35 @@
 }
 
 :root[data-appearance="dark"] {
-  --bg-0: #090909;
+  --bg-0: #020f0f;
 
-  --surface: #0f0f10;
-  --surface-elev: #121214;
-  --surface-sunken: #0b0b0c;
+  --surface: #031818;
+  --surface-elev: #052120;
+  --surface-sunken: #061f1f;
 
-  --border: rgba(255, 255, 255, 0.055);
-  --border-subtle: rgba(255, 255, 255, 0.04);
-  --border-strong: rgba(255, 255, 255, 0.1);
-  --hairline: rgba(255, 255, 255, 0.06);
+  --border: rgba(255, 230, 203, 0.16);
+  --border-subtle: rgba(255, 230, 203, 0.10);
+  --border-strong: rgba(255, 230, 203, 0.28);
+  --hairline: rgba(255, 230, 203, 0.06);
 
-  --text-primary: #dddddf;
-  --text-secondary: #a5a5aa;
-  --text-tertiary: #76767c;
-  --text-on-strong: #0f0f0f;
+  --text-primary: #ffe6cb;
+  --text-secondary: rgba(255, 230, 203, 0.62);
+  --text-tertiary: rgba(255, 230, 203, 0.34);
+  --text-on-strong: #020f0f;
 
-  --fill-secondary: rgba(230, 230, 230, 0.075);
-  --fill-tertiary: rgba(230, 230, 230, 0.045);
+  --fill-secondary: rgba(255, 230, 203, 0.075);
+  --fill-tertiary: rgba(255, 230, 203, 0.045);
 
-  --hover-bg: #17171a;
+  --hover-bg: #062625;
 
-  --progress-bg: #26262a;
+  --progress-bg: rgba(255, 230, 203, 0.08);
   --progress-cpu: #5d88ff;
   --progress-memory: #a35cf5;
   --progress-swap: #818cf8;
   --progress-disk: #f1873d;
   --progress-network: #5bbb8a;
   --progress-load: #f472b6;
-  /* 与 light 模式相同的 OKLCH heat 曲线(在 dark 的 #26262a 轨道上也清晰)。
+  /* 与 light 模式相同的 OKLCH heat 曲线(在 dark 轨道上也清晰)。
      与 trafficQuotaSegmentColor() 一致,详见上方说明。 */
   --traffic-heat-spectrum: linear-gradient(
     to right in oklch,
