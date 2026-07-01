@@ -17,9 +17,7 @@ import { ChartTooltip, SwitchToggle } from "./ChartParts";
 import {
   cutPeakValues,
   detectTypicalIntervalSeconds,
-  downsampleAligned,
   insertMetricGapSentinels,
-  smoothByCount,
 } from "./chartData";
 import { latencyHeatColor, lossHeatColor } from "@/utils/metricTone";
 import { usePreferences } from "@/hooks/usePreferences";
@@ -38,13 +36,29 @@ function percentileFromSorted(sorted: number[], ratio: number) {
   return sorted[lower] + (sorted[upper] - sorted[lower]) * weight;
 }
 
-// 渲染前先按时间分桶降采样到这么多点（避免 uPlot 抽稀尖刺）。
-const MAX_RENDER_POINTS = 160;
-// “削峰平滑”关闭：窗口=1 即不再叠加滑动平均（之前默认 7 会把长时段磨成近似直线），
-// 改由保峰降采样让真实尖峰穿透显示——“关闭”此时真的等于“不额外平滑”。
-const SMOOTH_WINDOW_POINTS = 1;
-// “削峰平滑”开启：均值降采样 + EWMA 削峰 + 更强滑动平均，得到平滑曲线。点窗调大 → 更平滑。
-const SMOOTH_WINDOW_POINTS_PEAK = 13;
+// 在 series 数组里左右双向扫描，找到离 idx 最近的有效数值点。
+// 用于 tooltip 中 off-phase (undefined) 时取其最近的有效采样值显示。
+function findNearestValue(
+  series: Array<number | null | undefined>,
+  idx: number,
+): number | null {
+  const maxOffset = Math.max(idx, series.length - 1 - idx);
+  for (let offset = 1; offset <= maxOffset; offset += 1) {
+    const leftIdx = idx - offset;
+    if (leftIdx >= 0) {
+      const left = series[leftIdx];
+      if (typeof left === "number" && Number.isFinite(left)) return left;
+    }
+    const rightIdx = idx + offset;
+    if (rightIdx < series.length) {
+      const right = series[rightIdx];
+      if (typeof right === "number" && Number.isFinite(right)) return right;
+    }
+  }
+  return null;
+}
+
+
 
 export function PingChart({
   uuid,
@@ -120,10 +134,10 @@ export function PingChart({
   }, [tasks]);
 
   const chart = useMemo(() => {
-    // 为每个 task 构建完整的对齐序列。显隐通过每条 series 的 `show` 标志 (以及渲染门控)
-    // 实现，所以切换某条线不会重跑这套分桶流程。
+    // 固定间隔网格：按 task interval 最小值创建等间隔点，每条记录对齐到
+    // Math.floor(time / interval) * interval，确保工具提示步长与后端间隔一致。
     if (!data?.records.length || !tasks.length) return null;
-    const pointMap = new Map<number, TimedMetricPoint>();
+
     const sortedRecords = data.records
       .map((record) => ({
         record,
@@ -131,26 +145,37 @@ export function PingChart({
       }))
       .filter(({ time }) => time > 0)
       .sort((left, right) => left.time - right.time);
+    if (sortedRecords.length === 0) return null;
     const taskIntervals = tasks
       .map((task) => task.interval)
       .filter((value): value is number => typeof value === "number" && value > 0);
     const fallbackInterval = taskIntervals.length > 0
       ? Math.min(...taskIntervals)
       : detectTypicalIntervalSeconds(sortedRecords.map(({ time }) => time), 60);
-    const tolerance = Math.min(6, Math.max(0.8, fallbackInterval * 0.25));
+    const safeInterval = Math.max(5, Math.min(600, fallbackInterval));
 
-    // records 已按时间排序，且 anchor 之间间距总是大于 `tolerance` (只有当现有 anchor 都不
-    // 在容差内才会新建)，所以一条 record 至多匹配一个 anchor，且必为最近的那个。这样就是 O(n)
-    // 合并，而非原来的 O(records × anchors)。
-    let lastAnchor = Number.NEGATIVE_INFINITY;
+    const startTime = sortedRecords[0].time;
+    const endTime = sortedRecords[sortedRecords.length - 1].time;
+    const gridStart = Math.floor(startTime / safeInterval) * safeInterval;
+    const gridEnd = Math.ceil(endTime / safeInterval) * safeInterval;
+    const pointCount = Math.round((gridEnd - gridStart) / safeInterval) + 1;
+
+    const pointMap = new Map<number, TimedMetricPoint>();
+    for (let i = 0; i < pointCount; i += 1) {
+      const t = gridStart + i * safeInterval;
+      const point: TimedMetricPoint = { time: t };
+      for (const taskKey of taskKeys) {
+        point[taskKey] = undefined;
+      }
+      pointMap.set(t, point);
+    }
+
     for (const { record, time } of sortedRecords) {
       if (!taskKeySet.has(String(record.task_id))) continue;
-      const anchor = time - lastAnchor <= tolerance ? lastAnchor : time;
-      if (anchor === time) lastAnchor = time;
-      const current = pointMap.get(anchor) ?? { time: anchor };
-      // value>=0 都是成功（0 表示往返 <1ms，被后端取整成 0）；只有 value<0（即 -1）才是真丢包→断点。
-      current[String(record.task_id)] = record.value >= 0 ? record.value : null;
-      pointMap.set(anchor, current);
+      const gridTime = Math.floor(time / safeInterval) * safeInterval;
+      const point = pointMap.get(gridTime);
+      if (!point) continue;
+      point[String(record.task_id)] = record.value >= 0 ? record.value : null;
     }
 
     let chartPoints = [...pointMap.values()].sort((a, b) => a.time - b.time);
@@ -173,15 +198,7 @@ export function PingChart({
       chartPoints.map((point) => point[taskKey]),
     );
 
-    // 关闭削峰：保峰降采样（真实尖峰穿透）；开启削峰：均值降采样（配合后面的强平滑磨平尖峰）。
-    const reduced = downsampleAligned(times, perTask, MAX_RENDER_POINTS, !cutPeak);
-    // 关闭削峰时窗口=1（不额外平滑，如实显示）；开启削峰时点窗加大（并已在前面叠加 cutPeakValues 削峰）。
-    const smoothed = smoothByCount(
-      reduced.perTask,
-      cutPeak ? SMOOTH_WINDOW_POINTS_PEAK : SMOOTH_WINDOW_POINTS,
-    );
-
-    return [reduced.times, ...smoothed] as uPlot.AlignedData;
+    return [times, ...perTask] as uPlot.AlignedData;
   }, [cutPeak, data, taskKeySet, taskKeys, tasks]);
 
   useEffect(() => {
@@ -229,10 +246,13 @@ export function PingChart({
         visibleTasks
           .map((task) => {
             const taskIndex = taskIndexById.get(task.id) ?? 0;
-            const raw = chartRef.current[taskIndex + 1]?.[idx] as number | null | undefined;
+            const series = chartRef.current[taskIndex + 1] as Array<number | null | undefined> | undefined;
+            const raw = series?.[idx] as number | null | undefined;
+            // off-phase (undefined) 扫描最近的有效采样值；null（丢包）原样保留
+            const value = raw === undefined ? (series ? findNearestValue(series, idx) : null) : raw;
             return {
               label: taskLabels.get(task.id) ?? `任务 #${task.id}`,
-              raw: typeof raw === "number" && Number.isFinite(raw) ? raw : null,
+              raw: typeof value === "number" && Number.isFinite(value) ? value : null,
               color: taskColors.get(task.id) ?? colorForSeries(taskIndex, tasks.length),
             };
           })
