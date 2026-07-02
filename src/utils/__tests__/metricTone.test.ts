@@ -8,25 +8,54 @@ import {
   trafficUsageColor,
 } from "@/utils/metricTone";
 
-function hue(color: string): number {
-  const match = /^hsl\(([\d.]+)/.exec(color);
-  if (!match) throw new Error(`not an hsl color: ${color}`);
-  return Number(match[1]);
+function parseHexHue(hex: string): number {
+  const value = hex.replace("#", "");
+  const r = parseInt(value.substring(0, 2), 16) / 255;
+  const g = parseInt(value.substring(2, 4), 16) / 255;
+  const b = parseInt(value.substring(4, 6), 16) / 255;
+
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+
+  if (delta === 0) return 0;
+
+  let h: number;
+  if (max === r) {
+    h = ((g - b) / delta) % 6;
+  } else if (max === g) {
+    h = (b - r) / delta + 2;
+  } else {
+    h = (r - g) / delta + 4;
+  }
+
+  h = Math.round(h * 60);
+  if (h < 0) h += 360;
+  return h;
 }
 
-function oklchHue(color: string): number {
-  const match = /^oklch\([\d.]+ [\d.]+ ([\d.]+)\)$/.exec(color);
-  if (!match) throw new Error(`not an oklch color: ${color}`);
+function hue(color: string): number {
+  const varMatch = /var\(--[^,]+,\s*(#[0-9a-fA-F]{6})\)/.exec(color);
+  if (varMatch) return parseHexHue(varMatch[1]);
+
+  const hslMatch = /^hsl\(([\d.]+)/.exec(color);
+  if (hslMatch) return Number(hslMatch[1]);
+
+  throw new Error(`cannot parse hue from: ${color}`);
+}
+
+function colorMixPct(color: string): number {
+  const match = /var\(--quota-high[^)]+\)\s+([\d.]+)%/.exec(color);
+  if (!match) throw new Error(`cannot parse color-mix pct from: ${color}`);
   return Number(match[1]);
 }
 
 
 describe("latencyHeatColor", () => {
   it("treats 0ms (sub-millisecond success) as the greenest latency, not neutral", () => {
-    // 后端把往返 <1ms 取整成 0；0 是最优延迟,取最绿端(色相 ~145°),不能当无数据画成中性灰。
     const color = latencyHeatColor(0);
     expect(color).not.toBe("var(--text-tertiary)");
-    expect(hue(color)).toBeCloseTo(145, 0);
+    expect(color).toMatch(/var\(--latency-0/);
   });
 
   it("returns neutral only for no data (null/undefined) or loss (negative / non-finite)", () => {
@@ -44,7 +73,7 @@ describe("latencyHeatColor", () => {
 
 describe("lossHeatColor", () => {
   it("treats 0% loss as the greenest, neutral only for negative / no data", () => {
-    expect(hue(lossHeatColor(0))).toBeCloseTo(145, 0);
+    expect(lossHeatColor(0)).toMatch(/var\(--loss-0/);
     expect(lossHeatColor(null)).toBe("var(--text-tertiary)");
     expect(lossHeatColor(-1)).toBe("var(--text-tertiary)");
   });
@@ -58,13 +87,11 @@ describe("trafficUsageColor", () => {
   });
 
   it("stays green while at least half the quota remains", () => {
-    // used ≤ 50% 时处于绿色区(约 140–150°),健康配额不会被误显示成警告色
     expect(hue(trafficUsageColor(0.1))).toBeGreaterThan(140);
     expect(hue(trafficUsageColor(0.5))).toBeGreaterThan(140);
   });
 
   it("actually reaches red near the limit — the regression it fixes", () => {
-    // 以前 85% 以下根本到不了红色(hue ≲ 15°),整个常用区间都只是绿→浅绿
     expect(hue(trafficUsageColor(0.95))).toBeLessThan(20);
     expect(hue(trafficUsageColor(1))).toBeLessThan(12);
   });
@@ -80,28 +107,25 @@ describe("trafficUsageColor", () => {
 });
 
 describe("trafficQuotaSegmentColor", () => {
-  it("returns OKLCH and holds solid green across the short safe zone", () => {
-    // 按位置取色,所以每段颜色固定、与填充量无关。绿色保持区很短(约 10%),避免绿色占主导,
-    // 过了这段 hue 就往黄色下降
-    expect(trafficQuotaSegmentColor(0)).toBe("oklch(0.7200 0.1600 150.00)");
-    expect(trafficQuotaSegmentColor(0.05)).toBe("oklch(0.7200 0.1600 150.00)");
-    expect(oklchHue(trafficQuotaSegmentColor(0.3))).toBeLessThan(128);
+  it("returns color-mix expression referencing both CSS vars", () => {
+    const color = trafficQuotaSegmentColor(0);
+    expect(color).toMatch(/^color-mix\(in oklch,/);
+    expect(color).toContain("var(--quota-high");
+    expect(color).toContain("var(--quota-low");
   });
 
-  it("rotates the OKLCH hue green→yellow→orange→red so the zones stay distinct", () => {
-    expect(oklchHue(trafficQuotaSegmentColor(0.03))).toBeGreaterThan(145); // 绿
-    expect(oklchHue(trafficQuotaSegmentColor(0.44))).toBeGreaterThan(95); // 黄
-    expect(oklchHue(trafficQuotaSegmentColor(0.44))).toBeLessThan(125);
-    expect(oklchHue(trafficQuotaSegmentColor(0.72))).toBeLessThan(70); // 橙
-    expect(oklchHue(trafficQuotaSegmentColor(1))).toBeLessThan(35); // 红
+  it("interpolates the mix percentage from 100% down to 0%", () => {
+    expect(colorMixPct(trafficQuotaSegmentColor(0))).toBe(100);
+    expect(colorMixPct(trafficQuotaSegmentColor(0.5))).toBe(50);
+    expect(colorMixPct(trafficQuotaSegmentColor(1))).toBe(0);
   });
 
-  it("warms monotonically — OKLCH hue never rises with position", () => {
-    let prev = Number.POSITIVE_INFINITY;
+  it("warms monotonically — quota-high share never increases with position", () => {
+    let prev = 101;
     for (let p = 0; p <= 1.0001; p += 0.05) {
-      const h = oklchHue(trafficQuotaSegmentColor(Math.min(p, 1)));
-      expect(h).toBeLessThanOrEqual(prev + 1e-6);
-      prev = h;
+      const pct = colorMixPct(trafficQuotaSegmentColor(Math.min(p, 1)));
+      expect(pct).toBeLessThanOrEqual(prev + 1e-6);
+      prev = pct;
     }
   });
 
@@ -116,7 +140,6 @@ describe("speedRateColor", () => {
     expect(speedRateColor("KB/s")).toBe("var(--speed-low)");
     expect(speedRateColor("MB/s")).toBe("var(--speed-high)");
     expect(speedRateColor("GB/s")).toBe("var(--speed-max)");
-    // TB/s·PB/s 现实到不了,并入急速顶档(--speed-max)而非各占一档。
     expect(speedRateColor("TB/s")).toBe("var(--speed-max)");
     expect(speedRateColor("PB/s")).toBe("var(--speed-max)");
   });

@@ -64,21 +64,21 @@
   /* 流量上/下行方向色（图标、出站/入站箭头） */
   --traffic-up: #3b82f6;
   --traffic-down: #2f9e65;
-  /* 延迟热力 5 档（阈值同 metricTone.ts latencyHeatColor） */
-  --latency-0: hsl(136.0 66.0% 49.5%);
-  --latency-1: hsl(103.5 73.0% 51.5%);
-  --latency-2: hsl(65.0 79.0% 52.5%);
-  --latency-3: hsl(40.0 84.0% 52.5%);
-  --latency-4: hsl(18.0 85.0% 48.0%);
-  /* 丢包热力 5 档（阈值同 metricTone.ts lossHeatColor） */
-  --loss-0: hsl(136.0 66.0% 49.5%);
-  --loss-1: hsl(103.5 73.0% 51.5%);
-  --loss-2: hsl(65.0 79.0% 52.5%);
-  --loss-3: hsl(40.0 84.0% 52.5%);
-  --loss-4: hsl(18.0 85.0% 48.0%);
+  /* 延迟热力 5 档 */
+  --latency-0: #2bd257;
+  --latency-1: #5bde29;
+  --latency-2: #d6e626;
+  --latency-3: #eca820;
+  --latency-4: #e25112;
+  /* 丢包热力 5 档 */
+  --loss-0: #2bd257;
+  --loss-1: #5bde29;
+  --loss-2: #d6e626;
+  --loss-3: #eca820;
+  --loss-4: #e25112;
   /* 流量配额条起点（充足）与终点（耗尽） */
-  --quota-high: oklch(0.7200 0.1600 150.00);
-  --quota-low: oklch(0.6000 0.2200 27.00);
+  --quota-high: #2f9e65;
+  --quota-low: #dc2626;
   --status-online: #2f9e65;
   --status-offline: #dc2626;
 
@@ -151,20 +151,20 @@
   --traffic-up: #5d88ff;
   --traffic-down: #61c08f;
   /* 延迟热力 5 档（dark 下亮度略高） */
-  --latency-0: hsl(136.0 66.0% 55%);
-  --latency-1: hsl(103.5 73.0% 57%);
-  --latency-2: hsl(65.0 79.0% 58%);
-  --latency-3: hsl(40.0 84.0% 58%);
-  --latency-4: hsl(18.0 85.0% 54%);
+  --latency-0: #41d869;
+  --latency-1: #6de141;
+  --latency-2: #dae93f;
+  --latency-3: #eeb23a;
+  --latency-4: #ed6226;
   /* 丢包热力 5 档 */
-  --loss-0: hsl(136.0 66.0% 55%);
-  --loss-1: hsl(103.5 73.0% 57%);
-  --loss-2: hsl(65.0 79.0% 58%);
-  --loss-3: hsl(40.0 84.0% 58%);
-  --loss-4: hsl(18.0 85.0% 54%);
+  --loss-0: #41d869;
+  --loss-1: #6de141;
+  --loss-2: #dae93f;
+  --loss-3: #eeb23a;
+  --loss-4: #ed6226;
   /* 流量配额条起点与终点 */
-  --quota-high: oklch(0.7200 0.1600 150.00);
-  --quota-low: oklch(0.6000 0.2200 27.00);
+  --quota-high: #61c08f;
+  --quota-low: #d84e45;
   --status-online: #61c08f;
   --status-offline: #d84e45;
 

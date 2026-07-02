@@ -5,11 +5,11 @@ export function latencyHeatColor(ms: number | null | undefined): string {
   if (ms == null || !Number.isFinite(ms) || ms < 0) {
     return "var(--text-tertiary)";
   }
-  if (ms < 100) return "var(--latency-0, hsl(136.0 66.0% 49.5%))";
-  if (ms < 150) return "var(--latency-1, hsl(103.5 73.0% 51.5%))";
-  if (ms < 200) return "var(--latency-2, hsl(65.0 79.0% 52.5%))";
-  if (ms < 300) return "var(--latency-3, hsl(40.0 84.0% 52.5%))";
-  return "var(--latency-4, hsl(18.0 85.0% 48.0%))";
+  if (ms < 100) return "var(--latency-0, #2bd257)";
+  if (ms < 150) return "var(--latency-1, #5bde29)";
+  if (ms < 200) return "var(--latency-2, #d6e626)";
+  if (ms < 300) return "var(--latency-3, #eca820)";
+  return "var(--latency-4, #e25112)";
 }
 
 // 流量配额条的用量热力色,按 used/limit 取值,但调成读作"还剩多少":剩 ≥50% 时纯绿,随着耗尽
@@ -45,7 +45,7 @@ export function trafficUsageColor(fraction: number | null | undefined): string {
 export function trafficQuotaSegmentColor(pos: number): string {
   const p = clamp(pos, 0, 1);
   const pct = (1 - p) * 100;
-  return `color-mix(in oklch, var(--quota-high, oklch(0.7200 0.1600 150.00)) ${pct.toFixed(1)}%, var(--quota-low, oklch(0.6000 0.2200 27.00)))`;
+  return `color-mix(in oklch, var(--quota-high, #2f9e65) ${pct.toFixed(1)}%, var(--quota-low, #dc2626))`;
 }
 
 // 速率按"现实可见的四档"着色,量级越大越"热"。单机网卡基本到不了 TB/s·PB/s,不再为它们各留一档,
@@ -73,9 +73,9 @@ export function lossHeatColor(pct: number | null | undefined): string {
   if (pct == null || !Number.isFinite(pct) || pct < 0) {
     return "var(--text-tertiary)";
   }
-  if (pct < 1) return "var(--loss-0, hsl(136.0 66.0% 49.5%))";
-  if (pct < 3) return "var(--loss-1, hsl(103.5 73.0% 51.5%))";
-  if (pct < 5) return "var(--loss-2, hsl(65.0 79.0% 52.5%))";
-  if (pct < 10) return "var(--loss-3, hsl(40.0 84.0% 52.5%))";
-  return "var(--loss-4, hsl(18.0 85.0% 48.0%))";
+  if (pct < 1) return "var(--loss-0, #2bd257)";
+  if (pct < 3) return "var(--loss-1, #5bde29)";
+  if (pct < 5) return "var(--loss-2, #d6e626)";
+  if (pct < 10) return "var(--loss-3, #eca820)";
+  return "var(--loss-4, #e25112)";
 }
