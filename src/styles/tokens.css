@@ -33,21 +33,13 @@
   --progress-disk: #e97b35;
   --progress-network: #10b981;
   --progress-load: #ec4899;
-  /* compact 卡分段流量条的 heat 曲线 —— 与大卡 OKLCH trafficQuotaSegmentColor()
-     的色标一致(metricTone.ts),`in oklch` 插值使各档感知均匀、相邻色不互相污浊。
-     色相 green→chartreuse→yellow→orange→red,亮度在 yellow 处最高,绿色只占约 10%。
-     compact 条会在其上叠一层中性遮罩,覆盖到 --compact-gauge-fill 处。
-     OKLCH 需 2023+ 浏览器,与主题 color-mix() 的基线一致。 */
+  /* compact 卡流量条的 heat 曲线 —— 在 --quota-high（充足）与 --quota-low（耗尽）之间
+      做 OKLCH 插值，与大卡 trafficQuotaSegmentColor() 的 color-mix(in oklch, ...)
+      行为一致。用户自定义起止色后 compact 条自动跟随渐变。 */
   --traffic-heat-spectrum: linear-gradient(
     to right in oklch,
-    oklch(0.72 0.16 150) 0%,
-    oklch(0.72 0.16 150) 10%,
-    oklch(0.8 0.18 128) 28%,
-    oklch(0.86 0.18 110) 44%,
-    oklch(0.8 0.18 85) 58%,
-    oklch(0.72 0.19 62) 72%,
-    oklch(0.65 0.21 40) 86%,
-    oklch(0.6 0.22 27) 100%
+    var(--quota-high, oklch(0.72 0.16 150)) 0%,
+    var(--quota-low, oklch(0.6 0.22 27)) 100%
   );
 
   --status-success: #2f9e65;
@@ -125,17 +117,11 @@
   --progress-network: #5bbb8a;
   --progress-load: #f472b6;
   /* 与 light 模式相同的 OKLCH heat 曲线(在 dark 轨道上也清晰)。
-     与 trafficQuotaSegmentColor() 一致,详见上方说明。 */
+      与 trafficQuotaSegmentColor() 一致,详见上方说明。 */
   --traffic-heat-spectrum: linear-gradient(
     to right in oklch,
-    oklch(0.72 0.16 150) 0%,
-    oklch(0.72 0.16 150) 10%,
-    oklch(0.8 0.18 128) 28%,
-    oklch(0.86 0.18 110) 44%,
-    oklch(0.8 0.18 85) 58%,
-    oklch(0.72 0.19 62) 72%,
-    oklch(0.65 0.21 40) 86%,
-    oklch(0.6 0.22 27) 100%
+    var(--quota-high, oklch(0.72 0.16 150)) 0%,
+    var(--quota-low, oklch(0.6 0.22 27)) 100%
   );
 
   --status-success: #61c08f;
