@@ -11,9 +11,10 @@
 | Command | What it does |
 |---|---|
 | `npm run dev` | Vite dev server |
-| `npm run build` | `tsc -b` (project references) then `vite build` |
+| `npm run build` | `tsc -b` (project references) → `vite build` |
+| `npm run preview` | `vite preview` (preview production build locally) |
 | `npm run package` | `build` → `scripts/make-preview.mjs` → `scripts/package-zip.mjs` |
-| `npm run release` | version alignment check → typecheck → build → package |
+| `npm run release` | `scripts/release.mjs` — version alignment → programmatic tsc → vite build → package |
 | `npm run lint` | ESLint (React Hooks rules only) |
 | `npm run typecheck` | `tsc -b` standalone |
 | `npm run test` | `vitest run` |

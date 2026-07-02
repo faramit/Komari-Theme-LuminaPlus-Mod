@@ -491,11 +491,7 @@ const NodeHealthSection = memo(function NodeHealthSection({
 // 任意 chip 都能看到全部 tag(包括 fit 阶段被丢掉的),而不只是这个 chip 的 label。
 function FooterTagChip({ tag }: { tag: DisplayTag }) {
   return (
-    <span
-      data-tag={tag.color}
-      className="dstatus-tag-chip"
-      style={{ background: "var(--tag-bg)", color: "var(--tag-fg)" }}
-    >
+    <span className="dstatus-tag-chip">
       {tag.label}
     </span>
   );

@@ -9,6 +9,8 @@ import {
   ArrowUp,
   ArrowDown,
   RotateCcw,
+  Signal,
+  Unplug,
 } from "lucide-react";
 import { usePreferences } from "@/hooks/usePreferences";
 import {
@@ -31,6 +33,18 @@ const ICONS: Record<MetricColorKey, typeof Cpu> = {
   speedMax: Zap,
   trafficUp: ArrowUp,
   trafficDown: ArrowDown,
+  latency0: Signal,
+  latency1: Signal,
+  latency2: Signal,
+  latency3: Signal,
+  latency4: Signal,
+  loss0: Unplug,
+  loss1: Unplug,
+  loss2: Unplug,
+  loss3: Unplug,
+  loss4: Unplug,
+  quotaHigh: Database,
+  quotaLow: Database,
 };
 
 export function MetricColorPicker() {

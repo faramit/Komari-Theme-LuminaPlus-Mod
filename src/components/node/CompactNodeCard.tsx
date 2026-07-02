@@ -542,7 +542,7 @@ function CompactNodeInfoStrip({
           <CompactInfoRow
             icon={<CircleDollarSign size={12} strokeWidth={2.2} />}
             value={renewalPrice || "未填"}
-            color={renewalPrice ? "var(--status-success)" : "var(--text-tertiary)"}
+            color={renewalPrice ? "var(--text-primary)" : "var(--text-tertiary)"}
           />
         </CompactInfoTile>
       )}

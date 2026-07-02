@@ -20,7 +20,19 @@ export type MetricColorKey =
   | "speedHigh"
   | "speedMax"
   | "trafficUp"
-  | "trafficDown";
+  | "trafficDown"
+  | "latency0"
+  | "latency1"
+  | "latency2"
+  | "latency3"
+  | "latency4"
+  | "loss0"
+  | "loss1"
+  | "loss2"
+  | "loss3"
+  | "loss4"
+  | "quotaHigh"
+  | "quotaLow";
 
 export type MetricColorGroup = "metric" | "speed" | "traffic";
 
@@ -47,6 +59,18 @@ export const METRIC_COLOR_META: ReadonlyArray<{
   { key: "speedMax", label: "急速", cssVar: "--speed-max", group: "speed" },
   { key: "trafficUp", label: "上行", cssVar: "--traffic-up", group: "traffic" },
   { key: "trafficDown", label: "下行", cssVar: "--traffic-down", group: "traffic" },
+  { key: "quotaHigh", label: "剩余流量充足", cssVar: "--quota-high", group: "traffic" },
+  { key: "quotaLow", label: "剩余流量不足", cssVar: "--quota-low", group: "traffic" },
+  { key: "latency0", label: "延迟 ＜100ms", cssVar: "--latency-0", group: "metric" },
+  { key: "latency1", label: "延迟 ＜150ms", cssVar: "--latency-1", group: "metric" },
+  { key: "latency2", label: "延迟 ＜200ms", cssVar: "--latency-2", group: "metric" },
+  { key: "latency3", label: "延迟 ＜300ms", cssVar: "--latency-3", group: "metric" },
+  { key: "latency4", label: "延迟 ≥300ms", cssVar: "--latency-4", group: "metric" },
+  { key: "loss0", label: "丢包 ＜1%", cssVar: "--loss-0", group: "metric" },
+  { key: "loss1", label: "丢包 ＜3%", cssVar: "--loss-1", group: "metric" },
+  { key: "loss2", label: "丢包 ＜5%", cssVar: "--loss-2", group: "metric" },
+  { key: "loss3", label: "丢包 ＜10%", cssVar: "--loss-3", group: "metric" },
+  { key: "loss4", label: "丢包 ≥10%", cssVar: "--loss-4", group: "metric" },
 ];
 
 export type MetricColors = Partial<Record<MetricColorKey, string>>;
