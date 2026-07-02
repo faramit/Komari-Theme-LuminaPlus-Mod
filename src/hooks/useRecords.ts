@@ -13,9 +13,9 @@ export function useLoadRecords(uuid: string, hours = 6, enabled = true) {
   });
 }
 
-export function usePingRecords(uuid: string, hours = 6, enabled = true) {
+export function usePingRecords(uuid: string, hours = 6, enabled = true, refreshKey = 0) {
   return useQuery({
-    queryKey: ["records", "ping", uuid, hours],
+    queryKey: ["records", "ping", uuid, hours, refreshKey],
     queryFn: () => getPingRecords(uuid, hours),
     staleTime: 300_000,
     // 关掉后台自动重拉（聚焦/切标签页的 refetch 会让 uplot-react 重建图表、偶发闪空白）；有手动刷新兜底。

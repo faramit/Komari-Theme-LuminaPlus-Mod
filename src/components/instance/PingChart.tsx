@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import UplotReact from "uplot-react";
 import type uPlot from "uplot";
 import { Eye, EyeOff, RefreshCw } from "lucide-react";
@@ -69,7 +69,8 @@ export function PingChart({
   hours: number;
   active?: boolean;
 }) {
-  const { data, isLoading, refetch } = usePingRecords(uuid, hours, active);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const { data, isLoading } = usePingRecords(uuid, hours, active, refreshKey);
   const { resolvedAppearance } = usePreferences();
   const { w, h, ref: chartSizeRef } = useResponsiveChartSize("wide");
   const [hiddenTasks, setHiddenTasks] = useState<Set<number>>(new Set());
@@ -408,7 +409,14 @@ export function PingChart({
           {hiddenTasks.size === 0 ? <EyeOff size={14} /> : <Eye size={14} />}
           {hiddenTasks.size === 0 ? "隐藏全部" : "显示全部"}
         </button>
-        <button type="button" className="instance-toggle-button" onClick={() => void refetch()}>
+        <button type="button" className="instance-toggle-button" onClick={() => {
+          setRefreshKey((k) => k + 1);
+          setTimeout(() => {
+            startTransition(() => {
+              setRefreshKey((k) => k + 1);
+            });
+          }, 0);
+        }}>
           <RefreshCw size={14} />
           刷新
         </button>
