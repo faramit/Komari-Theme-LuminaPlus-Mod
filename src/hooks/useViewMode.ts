@@ -4,8 +4,8 @@ import { subscribeMediaQuery } from "@/utils/mediaQuery";
 import { isNodeViewMode, type NodeViewMode } from "@/utils/themeSettings";
 
 // Legacy keys retained so session view-mode overrides survive the rename.
-const DESKTOP_OVERRIDE_KEY = "komaritheme:node-view-mode-session:desktop";
-const MOBILE_OVERRIDE_KEY = "komaritheme:node-view-mode-session:mobile";
+const DESKTOP_OVERRIDE_KEY = "luminaplusmod:node-view-mode-session:desktop";
+const MOBILE_OVERRIDE_KEY = "luminaplusmod:node-view-mode-session:mobile";
 const MOBILE_QUERY = "(max-width: 720px)";
 
 interface ViewModeState {

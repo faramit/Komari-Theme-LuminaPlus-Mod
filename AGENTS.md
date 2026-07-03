@@ -1,4 +1,4 @@
-# AGENTS.md — Komari-Theme-LuminaPlus
+# AGENTS.md — Komari-Theme-LuminaPlus-Mod
 
 ## Project structure
 - React 19 + TypeScript + Vite + Tailwind CSS v4 (`@import "tailwindcss"` syntax, not v3)
@@ -24,7 +24,7 @@
 - `tsc -b` uses project references (`tsconfig.json` → `tsconfig.app.json` + `tsconfig.node.json`)
 - Version must match between `package.json` and `komari-theme.json` before release
 - Preview image is copied from `docs/images/theme-preview.png` to `preview.png`
-- Packaged zip (`Komari-Theme-LuminaPlus-vX.Y.Z.zip`) includes `komari-theme.json`, `preview.png`, and `dist/`
+- Packaged zip (`Komari-Theme-LuminaPlus-Mod-vX.Y.Z.zip`) includes `komari-theme.json`, `preview.png`, and `dist/`
 - CI publishes GitHub release on `v*` tags, release notes from `.github/release-notes/<tagname>.md`, falling back to `v1.1.4.md`
 
 ## Code conventions
@@ -44,4 +44,4 @@
 - WebSocket RPC2 reconnects with exponential backoff (3s → 30s max), unlimited retries
 - WebSocket client and store both have `import.meta.hot.dispose` cleanup for HMR
 - Vite manual chunk splitting: `react`, `query`, `charts` (uplot), `validation` (zod)
-- Background/theme settings cached in `localStorage` with `komaritheme:` prefix, applied before first paint via inline `<script>` in `index.html`
+- Background/theme settings cached in `localStorage` with `luminaplusmod:` prefix, applied before first paint via inline `<script>` in `index.html`

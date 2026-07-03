@@ -116,7 +116,7 @@ export function computeBackgroundGlass(opacity: unknown): BackgroundGlass {
 }
 
 // Legacy key retained so existing users keep their saved background after the rename.
-export const BACKGROUND_CACHE_KEY = "komaritheme:bg";
+export const BACKGROUND_CACHE_KEY = "luminaplusmod:bg";
 
 interface BackgroundSettingsInput {
   backgroundImage: string;

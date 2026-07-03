@@ -1,13 +1,11 @@
-# Komari-Theme-LuminaPlus
-
-### 由于项目在1.1.10版本更名 请大家**重新在komari添加一下新的主题仓库地址** 需要重新配置一下 带来不便请谅解，不好意思了铁铁们
+# Komari-Theme-LuminaPlus-Mod
 
 基于 [komari-theme-Lumina](https://github.com/stqfdyr/komari-theme-Lumina) 的增强分支。感谢原作者 [stqfdyr](https://github.com/stqfdyr) 开源 Lumina 主题。
 
 ## 效果预览
 
 <p align="center">
-  <img src="docs/images/theme-preview.png" alt="Komari-Theme-LuminaPlus 综合预览" width="90%">
+  <img src="docs/images/theme-preview.png" alt="Komari-Theme-LuminaPlus-Mod 综合预览" width="90%">
 </p>
 
 ### 首页总览与节点卡片
@@ -132,10 +130,10 @@
 
 ## Star History
 
-<a href="https://www.star-history.com/?repos=shanyang242%2FKomari-Theme-LuminaPlus&type=timeline&legend=bottom-right">
+<a href="https://www.star-history.com/?repos=faramit%2FKomari-Theme-LuminaPlus-Mod&type=timeline&legend=bottom-right">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=shanyang242/Komari-Theme-LuminaPlus&type=timeline&theme=dark&legend=bottom-right" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=shanyang242/Komari-Theme-LuminaPlus&type=timeline&legend=bottom-right" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=shanyang242/Komari-Theme-LuminaPlus&type=timeline&legend=bottom-right" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=faramit/Komari-Theme-LuminaPlus-Mod&type=timeline&theme=dark&legend=bottom-right" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=faramit/Komari-Theme-LuminaPlus-Mod&type=timeline&legend=bottom-right" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=faramit/Komari-Theme-LuminaPlus-Mod&type=timeline&legend=bottom-right" />
  </picture>
 </a>

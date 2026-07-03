@@ -11,7 +11,7 @@ import {
 // 访客首页排序偏好。仿 useViewMode:管理员设站点默认(themeSettings),访客的临时选择写
 // sessionStorage 覆盖;选回与默认一致即清除覆盖(将来站长改默认仍能生效)。单一消费者(NodeGrid)
 // 持有,再把状态下发给排序控件,避免多实例各存一份而分叉。
-const OVERRIDE_KEY = "komaritheme:home-sort";
+const OVERRIDE_KEY = "luminaplusmod:home-sort";
 
 interface SortPref {
   field: HomeSortField;

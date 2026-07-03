@@ -34,9 +34,9 @@ jobs:
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Komari-Theme-LuminaPlus-package
+          name: Komari-Theme-LuminaPlus-Mod-package
           path: |
-            Komari-Theme-LuminaPlus-v*.zip
+            Komari-Theme-LuminaPlus-Mod-v*.zip
             preview.png
 
       - name: Resolve release notes
@@ -55,6 +55,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            Komari-Theme-LuminaPlus-v*.zip
+            Komari-Theme-LuminaPlus-Mod-v*.zip
             preview.png
           body_path: ${{ steps.release-notes.outputs.path }}
