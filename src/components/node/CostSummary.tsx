@@ -18,6 +18,7 @@ import {
 } from "@/utils/cost";
 import { collectMatchingNodeUuids } from "@/utils/nodeIdentity";
 import { getExpireDaysRemaining, LONG_TERM_EXPIRE_DAYS } from "@/utils/format";
+import { formatBillingCycle } from "@/utils/billing";
 
 type CostSortField = "weight" | "price" | "remain";
 type CostSortDirection = "asc" | "desc";
@@ -27,15 +28,6 @@ const COST_SORT_OPTIONS: Array<{ field: CostSortField; label: string }> = [
   { field: "price", label: "价格" },
   { field: "remain", label: "剩余" },
 ];
-
-function formatCostCycle(days: number) {
-  if (days === -1) return "永久";
-  if (days === 30) return "月";
-  if (days === 90) return "季";
-  if (days === 180) return "半年";
-  if (days === 365 || days === 360) return "年";
-  return days > 0 ? `${days}天` : "年";
-}
 
 function formatCostExpiry(expiredAt: string) {
   const days = getExpireDaysRemaining(expiredAt);
@@ -289,7 +281,7 @@ export function CostSummary({
                 detailRows.map((detail) => {
                   const expiryLabel = formatCostExpiry(detail.expiredAt);
                   const priceLabel =
-                    detail.note || `${formatCnyMoney(detail.priceCny)}/${formatCostCycle(detail.billingCycleDays)}`;
+                    detail.note || `${formatCnyMoney(detail.priceCny)}/${formatBillingCycle(detail.billingCycleDays)}`;
                   return (
                     <div
                       key={detail.uuid}

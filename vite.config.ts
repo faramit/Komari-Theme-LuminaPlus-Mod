@@ -36,8 +36,14 @@ export default defineConfig({
           if (normalized.includes("/node_modules/zod/")) {
             return "validation";
           }
+          if (normalized.includes("/node_modules/lucide-react/")) {
+            return "icons";
+          }
         },
       },
     },
+  },
+  optimizeDeps: {
+    include: ["uplot", "uplot-react", "zod", "lucide-react", "clsx"],
   },
 });

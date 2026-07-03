@@ -14,15 +14,16 @@ export type ThemeSettingsState = ResolvedThemeSettings & {
 
 export function useThemeSettings(): ThemeSettingsState {
   const { data: config, isError, isLoading } = usePublicConfig();
-  const hasConfig = config != null;
-  const isReady = hasConfig || isError;
   return useMemo(
-    () => ({
-      ...normalizeThemeSettings(config?.theme_settings),
-      isReady,
-      isLoading: isLoading && !hasConfig,
-      isError,
-    }),
-    [config?.theme_settings, hasConfig, isError, isLoading, isReady],
+    () => {
+      const hasConfig = config != null;
+      return {
+        ...normalizeThemeSettings(config?.theme_settings),
+        isReady: hasConfig || isError,
+        isLoading: isLoading && !hasConfig,
+        isError,
+      };
+    },
+    [config, isError, isLoading],
   );
 }

@@ -319,10 +319,7 @@ function updateTrafficTrendSeries(
     opacity: safeValue > 0 ? 0.4 + level * 0.48 : 0.52,
   };
 
-  const buffer =
-    prevSeries.buffer.length === TRAFFIC_TREND_SAMPLE_COUNT
-      ? prevSeries.buffer
-      : new Array<TrafficTrendSample>(TRAFFIC_TREND_SAMPLE_COUNT);
+  const buffer = new Array<TrafficTrendSample>(TRAFFIC_TREND_SAMPLE_COUNT);
   const nextSize =
     prevSeries.size < TRAFFIC_TREND_SAMPLE_COUNT
       ? prevSeries.size + 1
@@ -336,11 +333,9 @@ function updateTrafficTrendSeries(
       ? (prevSeries.start + prevSeries.size) % TRAFFIC_TREND_SAMPLE_COUNT
       : prevSeries.start;
 
-  if (prevSeries.size > 0 && buffer !== prevSeries.buffer) {
-    for (let i = 0; i < prevSeries.size; i++) {
-      buffer[(prevSeries.start + i) % TRAFFIC_TREND_SAMPLE_COUNT] =
-        prevSeries.buffer[(prevSeries.start + i) % TRAFFIC_TREND_SAMPLE_COUNT]!;
-    }
+  for (let i = 0; i < prevSeries.size; i++) {
+    buffer[(prevSeries.start + i) % TRAFFIC_TREND_SAMPLE_COUNT] =
+      prevSeries.buffer[(prevSeries.start + i) % TRAFFIC_TREND_SAMPLE_COUNT]!;
   }
   buffer[insertIndex] = nextSample;
 
@@ -404,9 +399,15 @@ function emitMappedListeners(
 
 function commit(next: State, touches: CommitTouches = {}) {
   state = next;
-  // 每次 state 转换都自增。派生列表的 snapshot 用它做缓存 key,这样 getSnapshot(每次 React
-  // 渲染都会调用)在上次调用后没有 commit 时能 O(1) 返回缓存引用。
-  storeVersion += 1;
+  // 有真实数据变更（非纯 storeStatus）时才递增版本号，避免 failure-only commit
+  // 不必要地失效所有派生 snapshot 的缓存。
+  const hasDataChanges =
+    touches.nodeList ||
+    touches.allNodes ||
+    touches.meta !== undefined ||
+    touches.metrics !== undefined ||
+    touches.trafficTrends !== undefined;
+  if (hasDataChanges) storeVersion += 1;
   const homeTouched = Boolean(
     touches.nodeList ||
       touches.allNodes ||

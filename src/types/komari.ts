@@ -65,8 +65,8 @@ export const NodeInfoSchema = z
 export interface NodeInfo {
   uuid: string;
   name: string;
-  group?: string | null;
-  region?: string | null;
+  group: string;
+  region: string;
   hidden: boolean;
   cpu_name: string;
   cpu_cores: number;
@@ -80,10 +80,10 @@ export interface NodeInfo {
   disk_total: number;
   weight: number;
   price: number;
-  billing_cycle?: string | null;
+  billing_cycle: string;
   auto_renewal: boolean;
   currency: string;
-  expired_at?: string | null;
+  expired_at: string;
   tags: string;
   public_remark: string;
   traffic_limit: number;

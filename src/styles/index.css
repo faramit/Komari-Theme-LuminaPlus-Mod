@@ -92,8 +92,8 @@ html.theme-flip *::after {
 }
 
 :focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring);
   border-radius: inherit;
 }
 
@@ -114,4 +114,13 @@ html.theme-flip *::after {
 }
 ::-webkit-scrollbar-track {
   background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0s !important;
+    animation-duration: 0s !important;
+  }
 }

@@ -165,11 +165,11 @@ export function formatExpireDays(iso: string | null | undefined): { value: strin
 function inferPlainTagColor(label: string): string {
   const normalized = label.trim().toLowerCase();
 
-  if (/(cn2gia|9929|cmin2)/i.test(normalized)) {
+  if (/\b(cn2gia|9929|cmin2)\b/i.test(normalized)) {
     return "blue";
   }
 
-  if (/(163pp|163|4837|cmi)/i.test(normalized)) {
+  if (/\b(163pp|163|4837|cmi)\b/i.test(normalized)) {
     return "green";
   }
 

@@ -156,6 +156,11 @@ class RPC2Client {
 
       const handleOpen = () => {
         cleanup();
+        // 连接成功后清除任何已排队的重连定时器，避免冗余连接。
+        if (this.reconnectTimer != null) {
+          window.clearTimeout(this.reconnectTimer);
+          this.reconnectTimer = null;
+        }
         this.state = "connected";
         this.reconnectAttempts = 0;
         this.startHeartbeat();
@@ -365,7 +370,7 @@ class RPC2Client {
   }
 
   private scheduleReconnect() {
-    if (this.closed || this.reconnectTimer) return;
+    if (this.closed || this.reconnectTimer || this.state === "connected") return;
 
     // 指数退避,上限 MAX_RECONNECT_INTERVAL_MS,无限重试。旧代码 5 次后彻底停止,再加上
     // call() 在 disconnected 时 autoConnect,结果要么是无节流的 ~2s 重连风暴,要么完全不

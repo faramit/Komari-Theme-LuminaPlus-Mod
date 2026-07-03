@@ -69,25 +69,32 @@
         // Apply the cached custom background + card transparency before first
         // paint so a refresh doesn't flash the solid theme before React mounts.
         // Mirror of applyBackgroundCache() in src/utils/background.ts.
+        // 防御层:strip 可能逃逸 CSS value 上下文的控制字符和特殊字符。
+        // background.ts 保存时已做同样清理,这里只做纵深防御。
+        const sanitizeCssVal = function (val) {
+          return typeof val === "string"
+            ? val.replace(/[\x00-\x1f\x7f"'`()<>\\\s]/g, "")
+            : "";
+        };
         try {
           const rawBg = localStorage.getItem("luminaplusmod:bg");
           if (rawBg) {
             const bg = JSON.parse(rawBg);
             if (bg && bg.v === 1) {
               const dark = resolved === "dark";
-              const desktop = dark ? bg.darkDesktop : bg.lightDesktop;
-              const mobile = (dark ? bg.darkMobile : bg.lightMobile) || desktop;
+              const desktop = sanitizeCssVal(dark ? bg.darkDesktop : bg.lightDesktop) || "none";
+              const mobile = sanitizeCssVal(dark ? bg.darkMobile : bg.lightMobile) || desktop;
               const style = document.documentElement.style;
-              style.setProperty("--bg-image-desktop", desktop || "none");
-              style.setProperty("--bg-image-mobile", mobile || "none");
-              style.setProperty("--bg-size", bg.size || "cover");
-              style.setProperty("--bg-position", bg.position || "center");
-              style.setProperty("--surface-alpha", bg.alpha || "100");
+              style.setProperty("--bg-image-desktop", desktop);
+              style.setProperty("--bg-image-mobile", mobile);
+              style.setProperty("--bg-size", sanitizeCssVal(bg.size) || "cover");
+              style.setProperty("--bg-position", sanitizeCssVal(bg.position) || "center");
+              style.setProperty("--surface-alpha", sanitizeCssVal(bg.alpha) || "100");
               if (bg.blur) {
-                style.setProperty("--surface-blur", bg.blur);
+                style.setProperty("--surface-blur", sanitizeCssVal(bg.blur));
                 document.documentElement.dataset.bgGlass = "true";
               }
-              if (bg.scrim) style.setProperty("--bg-scrim", bg.scrim);
+              if (bg.scrim) style.setProperty("--bg-scrim", sanitizeCssVal(bg.scrim));
             }
           }
         } catch {}
