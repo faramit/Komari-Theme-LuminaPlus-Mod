@@ -1,8 +1,8 @@
 <div align="center">
 
-## PurCarte Mod
+## LuminaPlus Mod
 
-基于 [Komari-Theme-LuminaPlus]([https://github.com/Montia37/komari-theme-purcarte](https://github.com/shanyang242/Komari-Theme-LuminaPlus)) 修改的 [Komari](https://github.com/komari-monitor/komari) 个人用实用向主题。
+基于 [Komari-Theme-LuminaPlus](https://github.com/shanyang242/Komari-Theme-LuminaPlus) 修改的 [Komari](https://github.com/komari-monitor/komari) 个人用实用向主题。
 
 </div>
 
