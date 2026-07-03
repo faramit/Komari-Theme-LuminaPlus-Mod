@@ -19,6 +19,14 @@ export type MetricColorKey =
   | "speedLow"
   | "speedHigh"
   | "speedMax"
+  | "speedUpIdle"
+  | "speedUpLow"
+  | "speedUpHigh"
+  | "speedUpMax"
+  | "speedDownIdle"
+  | "speedDownLow"
+  | "speedDownHigh"
+  | "speedDownMax"
   | "trafficUp"
   | "trafficDown"
   | "latency0"
@@ -57,6 +65,14 @@ export const METRIC_COLOR_META: ReadonlyArray<{
   { key: "speedLow", label: "低速", cssVar: "--speed-low", group: "speed" },
   { key: "speedHigh", label: "高速", cssVar: "--speed-high", group: "speed" },
   { key: "speedMax", label: "急速", cssVar: "--speed-max", group: "speed" },
+  { key: "speedUpIdle", label: "上行超低速", cssVar: "--speed-up-idle", group: "speed" },
+  { key: "speedUpLow", label: "上行低速", cssVar: "--speed-up-low", group: "speed" },
+  { key: "speedUpHigh", label: "上行高速", cssVar: "--speed-up-high", group: "speed" },
+  { key: "speedUpMax", label: "上行急速", cssVar: "--speed-up-max", group: "speed" },
+  { key: "speedDownIdle", label: "下行超低速", cssVar: "--speed-down-idle", group: "speed" },
+  { key: "speedDownLow", label: "下行低速", cssVar: "--speed-down-low", group: "speed" },
+  { key: "speedDownHigh", label: "下行高速", cssVar: "--speed-down-high", group: "speed" },
+  { key: "speedDownMax", label: "下行急速", cssVar: "--speed-down-max", group: "speed" },
   { key: "trafficUp", label: "上行", cssVar: "--traffic-up", group: "traffic" },
   { key: "trafficDown", label: "下行", cssVar: "--traffic-down", group: "traffic" },
   { key: "quotaHigh", label: "剩余流量充足", cssVar: "--quota-high", group: "traffic" },

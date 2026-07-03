@@ -31,6 +31,7 @@ import {
   lossHeatColor,
   speedRateColor,
   speedRateColorFromBytes,
+  trafficQuotaSegmentColor,
 } from "@/utils/metricTone";
 import { formatHealthBucketTooltip } from "./pingBucketText";
 import { joinTagTitle, nodeDetailLinkLabels, pingEmptyLabels } from "./nodeCardShared";
@@ -46,6 +47,7 @@ import type { ByteRateDisplay } from "@/utils/format";
 import type { TrafficDisplay } from "@/utils/traffic";
 
 const TRAFFIC_DOT_COUNT = 16;
+const TRAFFIC_QUOTA_SEGMENTS = 18;
 const HEALTH_BAR_COUNT = 18;
 type CompactNode = NodeInfo & NodeMetrics;
 type CompactTag = { label: string; color: string };
@@ -504,13 +506,13 @@ function CompactNodeInfoStrip({
           icon={<ArrowUp size={12} strokeWidth={2.3} />}
           value={upRate.value}
           unit={upRate.unit}
-          color={speedRateColor(upRate.unit)}
+          color={speedRateColor(upRate.unit, "up")}
         />
         <CompactInfoRow
           icon={<ArrowDown size={12} strokeWidth={2.3} />}
           value={downRate.value}
           unit={downRate.unit}
-          color={speedRateColor(downRate.unit)}
+          color={speedRateColor(downRate.unit, "down")}
         />
         <CompactTrafficPulse up={trafficTrend.up} down={trafficTrend.down} />
       </CompactInfoTile>
@@ -565,8 +567,8 @@ function CompactNodeInfoStrip({
   );
 }
 
-// 流量阈值条:label + used / limit 同一行(紧凑卡片很挤,这里省掉剩余量),
-// 用单元素热力填充(无 canvas、无逐段 span)复用 gauge 轨道,保持每 tick 低开销。
+// 流量阈值条:label + used / limit 同一行,下面逐段渲染 18 个格子
+//（与大卡 NodeTrafficQuota 一致,每个格子按绝对位置上色）。
 function CompactTrafficBar({
   traffic,
   uptimeLabel,
@@ -574,15 +576,21 @@ function CompactTrafficBar({
   traffic: TrafficDisplay;
   uptimeLabel: string;
 }) {
-  const style = {
-    "--compact-gauge-color": traffic.color,
-    "--compact-gauge-fill": `${clamp01(traffic.fraction) * 100}%`,
-  } as CSSProperties;
+  const dots = Array.from({ length: TRAFFIC_QUOTA_SEGMENTS }, (_, i) => {
+    const pos = (i + 0.5) / TRAFFIC_QUOTA_SEGMENTS;
+    const lit = pos <= traffic.fraction;
+    return (
+      <span
+        key={i}
+        className="traffic-quota-segment"
+        style={{ background: lit ? trafficQuotaSegmentColor(pos) : "var(--progress-bg)" }}
+      />
+    );
+  });
 
   return (
     <div
       className="compact-node-traffic"
-      style={style}
       title={`流量 · ${traffic.typeLabel} · ${traffic.detail}${uptimeLabel ? ` · ${uptimeLabel}` : ""}`}
     >
       <div className={clsx("compact-node-traffic-body", uptimeLabel && "has-uptime")}>
@@ -592,7 +600,9 @@ function CompactTrafficBar({
               <Database size={12} strokeWidth={2.1} />
               <span>流量</span>
             </span>
-            <div className="compact-node-gauge-track" aria-hidden />
+            <div className="traffic-quota-track" aria-hidden>
+              {dots}
+            </div>
             <span className="compact-node-traffic-uptime">{uptimeLabel}</span>
             <span className="compact-node-traffic-value">{traffic.detail}</span>
           </>
@@ -605,7 +615,9 @@ function CompactTrafficBar({
               </span>
               <span className="compact-node-traffic-value">{traffic.detail}</span>
             </div>
-            <div className="compact-node-gauge-track" aria-hidden />
+            <div className="traffic-quota-track" aria-hidden>
+              {dots}
+            </div>
           </>
         )}
       </div>

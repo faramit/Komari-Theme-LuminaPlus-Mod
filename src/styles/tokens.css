@@ -53,6 +53,14 @@
   --speed-low: #d9992b;
   --speed-high: #e07a35;
   --speed-max: #d6463d;
+  --speed-up-idle: #3aa76a;
+  --speed-up-low: #d9992b;
+  --speed-up-high: #e07a35;
+  --speed-up-max: #d6463d;
+  --speed-down-idle: #3aa76a;
+  --speed-down-low: #d9992b;
+  --speed-down-high: #e07a35;
+  --speed-down-max: #d6463d;
   /* 流量上/下行方向色（图标、出站/入站箭头） */
   --traffic-up: #3b82f6;
   --traffic-down: #2f9e65;
@@ -133,6 +141,14 @@
   --speed-low: #e0b34f;
   --speed-high: #ef8f55;
   --speed-max: #ec6a5e;
+  --speed-up-idle: #61c08f;
+  --speed-up-low: #e0b34f;
+  --speed-up-high: #ef8f55;
+  --speed-up-max: #ec6a5e;
+  --speed-down-idle: #61c08f;
+  --speed-down-low: #e0b34f;
+  --speed-down-high: #ef8f55;
+  --speed-down-max: #ec6a5e;
   /* 流量上/下行方向色（图标、出站/入站箭头） */
   --traffic-up: #5d88ff;
   --traffic-down: #61c08f;

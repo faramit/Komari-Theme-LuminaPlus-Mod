@@ -51,17 +51,20 @@ export function trafficQuotaSegmentColor(pos: number): string {
 // 速率按"现实可见的四档"着色,量级越大越"热"。单机网卡基本到不了 TB/s·PB/s,不再为它们各留一档,
 // 而是把日常常见区间拆开:B/s 超低速(绿) → KB/s 低速(琥珀) → MB/s 高速(橙) → GB/s 及以上 急速(红)。
 // GB/TB/PB 全并入急速顶档。挂机(B/s)归最低档保持有色,只有未知单位才回退中性色。
-const SPEED_RATE_COLOR: Record<string, string> = {
-  "B/s": "var(--speed-idle)",
-  "KB/s": "var(--speed-low)",
-  "MB/s": "var(--speed-high)",
-  "GB/s": "var(--speed-max)",
-  "TB/s": "var(--speed-max)",
-  "PB/s": "var(--speed-max)",
+const SPEED_RATE_SUFFIX: Record<string, string> = {
+  "B/s": "idle",
+  "KB/s": "low",
+  "MB/s": "high",
+  "GB/s": "max",
+  "TB/s": "max",
+  "PB/s": "max",
 };
 
-export function speedRateColor(unit: string): string {
-  return SPEED_RATE_COLOR[unit] ?? "var(--text-tertiary)";
+export function speedRateColor(unit: string, direction?: "up" | "down"): string {
+  const suffix = SPEED_RATE_SUFFIX[unit];
+  if (!suffix) return "var(--text-tertiary)";
+  if (direction) return `var(--speed-${direction}-${suffix})`;
+  return `var(--speed-${suffix})`;
 }
 
 // 给只有原始字节/秒、没有现成 unit 的场景(如脉冲点):先取单位档再上色,把"字节速率→颜色"集中在一处。

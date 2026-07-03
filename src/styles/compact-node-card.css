@@ -329,21 +329,9 @@
   gap: 8px;
 }
 
-.compact-node-traffic > .compact-node-traffic-body > .compact-node-gauge-track {
+.compact-node-traffic > .compact-node-traffic-body > .traffic-quota-track {
   grid-column: 1;
   grid-row: 2;
-  /* 仅流量仪表:把扁平的 --compact-gauge-color 填充换成共享的、按位置着色的热力光谱(中性遮盖
-     层挡住已用比例之外的部分),从而像大卡片那样按分段呈现 green→amber→red。各项指标仪表则通过
-     上面的基础规则保持单一纯色。 */
-  background:
-    linear-gradient(
-      to right,
-      transparent 0,
-      transparent var(--compact-gauge-fill, 0%),
-      var(--progress-bg) var(--compact-gauge-fill, 0%),
-      var(--progress-bg) 100%
-    ),
-    var(--traffic-heat-spectrum);
 }
 
 .compact-node-traffic-label {

@@ -648,7 +648,7 @@ function TrafficStat({
   icon: ReactNode;
 }) {
   // 按当前速率单位档取热力色:文字/圆点/实时点都随速度量级变色,图标仍用方向色(color)区分上下行。
-  const speedColor = speedRateColor(rate.unit);
+  const speedColor = speedRateColor(rate.unit, direction === "上行" ? "up" : "down");
   return (
     <div className="traffic-stat">
       <div className="traffic-stat-head">

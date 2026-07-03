@@ -32,6 +32,8 @@ import { Spinner } from "@/components/ui/Spinner";
 import { CompactNodeCard } from "./CompactNodeCard";
 import { CostSummary } from "./CostSummary";
 import { NodeCard } from "./NodeCard";
+import { Flag } from "@/components/ui/Flag";
+import { getDisplayRegionCode } from "@/utils/geo";
 
 // 把多个 uuid 拼成单个签名串作为 memo key。逗号安全:uuid 是标准 UUID
 // ([0-9a-f-]),永远不含逗号。
@@ -96,8 +98,6 @@ function HomeOverviewCards({
       : "—";
   const trafficDetailLabel = `↑ ${formatBytes(overview.trafficUp)} · ↓ ${formatBytes(overview.trafficDown)}`;
   const trafficCompactLabel = `↑${formatCompactBytes(overview.trafficUp)} ↓${formatCompactBytes(overview.trafficDown)}`;
-  const bandwidthDetailLabel = `↑ ${formatByteRateLabel(overview.netUp)} · ↓ ${formatByteRateLabel(overview.netDown)}`;
-  const bandwidthCompactLabel = `↑${formatCompactBytes(overview.netUp)} ↓${formatCompactBytes(overview.netDown)}`;
   const trafficRating =
     showOverviewRatings && showTrafficRating
       ? getOverviewRating({
@@ -185,15 +185,19 @@ function HomeOverviewCards({
       <article className="overview-card">
         <span className="overview-card-label">实时带宽</span>
         <div className="overview-card-main">
-          <p className="overview-card-value" style={{ color: speedRateColor(rate.unit) }}>
-            {rate.value}
-            <span className="overview-card-unit">{rate.unit}</span>
+          <p className="overview-card-value" style={{ fontSize: 18 }}>
+            <span style={{ color: speedRateColor(formatByteRate(overview.netUp).unit, "up") }}>
+              ↑ {formatByteRateLabel(overview.netUp)}
+            </span>
+            <span style={{ color: speedRateColor(formatByteRate(overview.netDown).unit, "down") }}>
+              &nbsp;· ↓ {formatByteRateLabel(overview.netDown)}
+            </span>
           </p>
         </div>
         <div className="overview-card-footer">
-          <p className="overview-card-sub" title={bandwidthDetailLabel}>
-            <span className="overview-card-sub-full">{bandwidthDetailLabel}</span>
-            <span className="overview-card-sub-compact">{bandwidthCompactLabel}</span>
+          <p className="overview-card-sub">
+            {rate.value}
+            <span className="overview-card-unit">{rate.unit}</span>
           </p>
           {renderRating(bandwidthRating)}
         </div>
@@ -226,6 +230,16 @@ function HomeOverviewCards({
   );
 }
 
+const GROUP_FLAG_CACHE = new Map<string, boolean>();
+
+function hasCountryFlag(group: string): boolean {
+  if (GROUP_FLAG_CACHE.has(group)) return GROUP_FLAG_CACHE.get(group)!;
+  const code = getDisplayRegionCode(group);
+  const matched = code !== "UN";
+  GROUP_FLAG_CACHE.set(group, matched);
+  return matched;
+}
+
 function GroupTabs({
   groups,
   selectedGroup,
@@ -246,19 +260,22 @@ function GroupTabs({
       >
         全部
       </button>
-      {groups.map((group) => (
-        <button
-          key={group}
-          type="button"
-          role="tab"
-          aria-selected={selectedGroup === group}
-          data-active={selectedGroup === group ? "true" : "false"}
-          onClick={() => onSelectGroup(group)}
-          title={group}
-        >
-          {group}
-        </button>
-      ))}
+      {groups.map((group) => {
+        const showFlag = hasCountryFlag(group);
+        return (
+          <button
+            key={group}
+            type="button"
+            role="tab"
+            aria-selected={selectedGroup === group}
+            data-active={selectedGroup === group ? "true" : "false"}
+            onClick={() => onSelectGroup(group)}
+            title={group}
+          >
+            {showFlag ? <Flag region={group} size={24} /> : group}
+          </button>
+        );
+      })}
     </div>
   );
 }
