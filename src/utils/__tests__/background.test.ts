@@ -130,8 +130,13 @@ describe("buildBackgroundCache", () => {
     surfaceOpacity: DEFAULT_SURFACE_OPACITY,
   };
 
-  it("returns null when no image is configured", () => {
-    expect(buildBackgroundCache(base)).toBeNull();
+  it("returns cache with none urls when no image is configured", () => {
+    const cache = buildBackgroundCache(base);
+    expect(cache.alpha).toBe("100");
+    expect(cache.lightDesktop).toBe("none");
+    expect(cache.darkDesktop).toBe("none");
+    expect(cache.lightMobile).toBe("none");
+    expect(cache.darkMobile).toBe("none");
   });
 
   it("resolves both appearances and wraps urls in url()", () => {
@@ -139,26 +144,25 @@ describe("buildBackgroundCache", () => {
       ...base,
       backgroundImage: "/light.webp|/dark.webp",
     });
-    expect(cache).not.toBeNull();
-    expect(cache?.lightDesktop).toBe('url("/light.webp")');
-    expect(cache?.darkDesktop).toBe('url("/dark.webp")');
+    expect(cache.lightDesktop).toBe('url("/light.webp")');
+    expect(cache.darkDesktop).toBe('url("/dark.webp")');
     // 没设置移动端图时回退到桌面端
-    expect(cache?.darkMobile).toBe('url("/dark.webp")');
+    expect(cache.darkMobile).toBe('url("/dark.webp")');
   });
 
   it("omits glass at full opacity but includes it when transparent", () => {
     const solid = buildBackgroundCache({ ...base, backgroundImage: "/a.webp" });
-    expect(solid?.blur).toBe("");
-    expect(solid?.scrim).toBe("");
-    expect(solid?.alpha).toBe("100");
+    expect(solid.blur).toBe("");
+    expect(solid.scrim).toBe("");
+    expect(solid.alpha).toBe("100");
 
     const glassy = buildBackgroundCache({
       ...base,
       backgroundImage: "/a.webp",
       surfaceOpacity: 50,
     });
-    expect(glassy?.alpha).toBe("50");
-    expect(glassy?.blur).toMatch(/^\d+px$/);
-    expect(glassy?.scrim).toContain("color-mix");
+    expect(glassy.alpha).toBe("50");
+    expect(glassy.blur).toMatch(/^\d+px$/);
+    expect(glassy.scrim).toContain("color-mix");
   });
 });
