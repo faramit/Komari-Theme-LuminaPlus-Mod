@@ -616,11 +616,6 @@ export function ThemeManage() {
     setDraftBackgroundAlignment(`${size},${draftBgAlignment.position}`);
   const setBgPosition = (position: BackgroundPosition) =>
     setDraftBackgroundAlignment(`${draftBgAlignment.size},${position}`);
-  const hasBackgroundImage = Boolean(
-    normalizeBackgroundUrl(draftBackgroundImage) ||
-      normalizeBackgroundUrl(draftBackgroundImageMobile),
-  );
-
   return (
     <div className="flex flex-col gap-5 py-2">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -870,9 +865,7 @@ export function ThemeManage() {
             </div>
             <span className="text-[11px] leading-relaxed text-[var(--text-tertiary)]">
               输入 0–100 的整数。100 = 完全不透明（与默认主题一致），数值越低卡片越通透、越能透出背景图。
-              {hasBackgroundImage
-                ? " 低于 95 时会自动叠加磨砂玻璃与可读性遮罩，保证文字清晰。"
-                : " 需先在上方设置背景图后才会生效。"}
+              低于 95 时会自动叠加磨砂玻璃与可读性遮罩，保证文字清晰。设置为 0 时卡片表面与边框完全透明。
             </span>
           </div>
         </div>
