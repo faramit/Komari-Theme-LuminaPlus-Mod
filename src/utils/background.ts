@@ -150,12 +150,11 @@ function toCssUrl(url: string): string {
   return url ? `url("${url}")` : "none";
 }
 
-export function buildBackgroundCache(settings: BackgroundSettingsInput): BackgroundCache | null {
+export function buildBackgroundCache(settings: BackgroundSettingsInput): BackgroundCache {
   const lightDesktop = resolveBackgroundUrl(settings.backgroundImage, "light");
   const darkDesktop = resolveBackgroundUrl(settings.backgroundImage, "dark");
   const lightMobile = resolveBackgroundUrl(settings.backgroundImageMobile, "light") || lightDesktop;
   const darkMobile = resolveBackgroundUrl(settings.backgroundImageMobile, "dark") || darkDesktop;
-  if (!lightDesktop && !darkDesktop && !lightMobile && !darkMobile) return null;
 
   const { size, position } = parseBackgroundAlignment(settings.backgroundAlignment);
   const glass = computeBackgroundGlass(settings.surfaceOpacity);
@@ -176,31 +175,16 @@ export function buildBackgroundCache(settings: BackgroundSettingsInput): Backgro
   };
 }
 
-const BACKGROUND_VAR_NAMES = [
-  "--bg-image-desktop",
-  "--bg-image-mobile",
-  "--bg-size",
-  "--bg-position",
-  "--surface-alpha",
-  "--surface-blur",
-  "--bg-scrim",
-] as const;
-
 /**
- * 按给定外观把背景 CSS 变量 + glass 开关写到(或清除自)<html> 上。与 index.html 内联脚本保持一致,
+ * 按给定外观把背景 CSS 变量 + glass 开关写到 <html> 上。与 index.html 内联脚本保持一致,
  * 让 React 和预绘制引导收敛到完全相同的值。
  */
 export function applyBackgroundCache(
-  cache: BackgroundCache | null,
+  cache: BackgroundCache,
   appearance: ResolvedAppearance,
 ): void {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
-  if (!cache) {
-    for (const name of BACKGROUND_VAR_NAMES) root.style.removeProperty(name);
-    delete root.dataset.bgGlass;
-    return;
-  }
   const dark = appearance === "dark";
   const desktop = dark ? cache.darkDesktop : cache.lightDesktop;
   const mobile = (dark ? cache.darkMobile : cache.lightMobile) || desktop;
@@ -220,12 +204,11 @@ export function applyBackgroundCache(
   else root.style.removeProperty("--bg-scrim");
 }
 
-export function persistBackgroundCache(cache: BackgroundCache | null): void {
+export function persistBackgroundCache(cache: BackgroundCache): void {
   if (typeof localStorage === "undefined") return;
   try {
-    if (cache) localStorage.setItem(BACKGROUND_CACHE_KEY, JSON.stringify(cache));
-    else localStorage.removeItem(BACKGROUND_CACHE_KEY);
+    localStorage.setItem(BACKGROUND_CACHE_KEY, JSON.stringify(cache));
   } catch {
-    // 大不了下次首屏背景没缓存而已,非致命。
+    // 非致命。
   }
 }
