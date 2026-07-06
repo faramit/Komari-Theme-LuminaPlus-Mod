@@ -238,24 +238,24 @@ export interface Me {
 
 export const LoadRecordSchema = z
   .object({
-    cpu: z.number().default(0),
-    gpu: z.number().default(0),
-    ram: z.number().default(0),
-    ram_total: z.number().default(0),
-    swap: z.number().default(0),
-    swap_total: z.number().default(0),
-    load: z.number().default(0),
-    temp: z.number().default(0),
-    disk: z.number().default(0),
-    disk_total: z.number().default(0),
-    net_in: z.number().default(0),
-    net_out: z.number().default(0),
-    net_total_up: z.number().default(0),
-    net_total_down: z.number().default(0),
-    process: z.number().default(0),
-    connections: z.number().default(0),
-    connections_udp: z.number().default(0),
-    time: z.union([z.string(), z.number()]),
+    cpu: looseNumber,
+    gpu: looseNumber,
+    ram: looseNumber,
+    ram_total: looseNumber,
+    swap: looseNumber,
+    swap_total: looseNumber,
+    load: looseNumber,
+    temp: looseNumber,
+    disk: looseNumber,
+    disk_total: looseNumber,
+    net_in: looseNumber,
+    net_out: looseNumber,
+    net_total_up: looseNumber,
+    net_total_down: looseNumber,
+    process: looseNumber,
+    connections: looseNumber,
+    connections_udp: looseNumber,
+    time: z.union([z.string(), z.number()]).catch(""),
     client: z.string().default(""),
   })
   .passthrough();
@@ -284,9 +284,9 @@ export interface LoadRecord {
 
 export const PingRecordSchema = z
   .object({
-    task_id: z.number(),
-    time: z.union([z.string(), z.number()]),
-    value: z.number(),
+    task_id: looseNumber,
+    time: z.union([z.string(), z.number()]).catch(""),
+    value: looseNumber,
     client: z.string().default(""),
   })
   .passthrough();

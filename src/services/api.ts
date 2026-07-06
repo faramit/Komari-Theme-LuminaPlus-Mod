@@ -73,17 +73,29 @@ function normalizeRpcLatestStatus(
   payload: unknown,
 ): Record<string, unknown> {
   if (payload && typeof payload === "object" && !Array.isArray(payload)) {
-    const maybeRecords = (payload as Record<string, unknown>).records;
+    const obj = payload as Record<string, unknown>;
+
+    // Try { records: { uuid: data } } — standard komari RPC envelope
+    const maybeRecords = obj.records as Record<string, unknown> | undefined;
     const wrapped = z.record(z.string(), z.unknown()).safeParse(maybeRecords);
-    if (wrapped.success) {
-      return wrapped.data;
+    if (wrapped.success) return wrapped.data;
+
+    // Try { data: { records: { uuid: data } } } or { data: { uuid: data } }
+    const maybeData = obj.data as Record<string, unknown> | undefined;
+    if (maybeData) {
+      const viaDataRecords = z.record(z.string(), z.unknown()).safeParse(
+        (maybeData as Record<string, unknown>).records,
+      );
+      if (viaDataRecords.success) return viaDataRecords.data;
+
+      const viaData = z.record(z.string(), z.unknown()).safeParse(maybeData);
+      if (viaData.success) return viaData.data;
     }
   }
 
+  // Try { uuid: data } directly
   const direct = z.record(z.string(), z.unknown()).safeParse(payload);
-  if (direct.success) {
-    return direct.data;
-  }
+  if (direct.success) return direct.data;
 
   return {};
 }
@@ -149,25 +161,49 @@ async function rpcCall<T>(
 function parseArrayLenient<S extends z.ZodTypeAny>(schema: S, value: unknown): z.infer<S>[] {
   if (!Array.isArray(value)) return [];
   const out: z.infer<S>[] = [];
+  let dropped = 0;
   for (const item of value) {
     const parsed = schema.safeParse(item);
-    if (parsed.success) out.push(parsed.data);
+    if (parsed.success) {
+      out.push(parsed.data);
+    } else {
+      dropped += 1;
+    }
+  }
+  if (dropped > 0) {
+    console.debug(`parseArrayLenient: dropped ${dropped}/${value.length} records`);
   }
   return out;
 }
 
 function extractRpcRecords(payload: RpcRecordsPayload, key?: string): unknown[] {
+  // Direct array of records
   if (Array.isArray(payload.records)) return payload.records;
-  if (!payload.records || typeof payload.records !== "object") return [];
 
-  const recordsByKey = payload.records as Record<string, unknown>;
-  if (key && Array.isArray(recordsByKey[key])) {
-    return recordsByKey[key];
+  // records is a plain object — { uuid: [record, ...] } or { uuid: [record, ...] }
+  if (payload.records && typeof payload.records === "object") {
+    const recordsByKey = payload.records as Record<string, unknown>;
+    if (key && Array.isArray(recordsByKey[key])) {
+      return recordsByKey[key];
+    }
+    return Object.values(recordsByKey).flatMap((value) =>
+      Array.isArray(value) ? value : [],
+    );
   }
 
-  return Object.values(recordsByKey).flatMap((value) =>
-    Array.isArray(value) ? value : [],
-  );
+  // Try nested under { data: { records: ... } } or { data: [...] }
+  const data = (payload as unknown as Record<string, unknown>).data;
+  if (data && typeof data === "object") {
+    const dataObj = data as Record<string, unknown>;
+    if (Array.isArray(dataObj.records)) return dataObj.records;
+    if (dataObj.records && typeof dataObj.records === "object") {
+      const byKey = dataObj.records as Record<string, unknown>;
+      if (key && Array.isArray(byKey[key])) return byKey[key];
+    }
+    if (Array.isArray(data)) return data;
+  }
+
+  return [];
 }
 
 function normalizeRpcLoadRecords(

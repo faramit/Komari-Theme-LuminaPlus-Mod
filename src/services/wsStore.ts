@@ -502,6 +502,14 @@ export function resolveFlatConnectionsTcp(payload: RealtimePayload): number {
   return Math.max(0, asNumber(payload.connections) - asNumber(payload.connections_udp));
 }
 
+function pickNested<T>(obj: Record<string, unknown>, ...keys: string[]): T | undefined {
+  for (const key of keys) {
+    const value = obj[key];
+    if (value != null) return value as T;
+  }
+  return undefined;
+}
+
 function normalizeRealtime(
   raw: unknown,
   meta: NodeInfo,
@@ -520,41 +528,45 @@ function normalizeRealtime(
   const hasNestedShape =
     Object.keys(cpu).length > 0 ||
     Object.keys(ram).length > 0 ||
-    Object.keys(network).length > 0;
+    Object.keys(network).length > 0 ||
+    Object.keys(load).length > 0 ||
+    Object.keys(disk).length > 0 ||
+    Object.keys(swap).length > 0 ||
+    Object.keys(connections).length > 0;
 
   if (hasNestedShape) {
     return {
       cpu: { usage: asNumber(cpu.usage) },
       ram: {
-        total: asNumber(ram.total, metrics.ramTotal || meta.mem_total),
-        used: asNumber(ram.used),
+        total: asNumber(pickNested(ram, "total", "ram_total"), metrics.ramTotal || meta.mem_total),
+        used: asNumber(pickNested(ram, "used", "ram")),
       },
       swap: {
-        total: asNumber(swap.total, metrics.swapTotal || meta.swap_total),
-        used: asNumber(swap.used),
+        total: asNumber(pickNested(swap, "total", "swap_total"), metrics.swapTotal || meta.swap_total),
+        used: asNumber(pickNested(swap, "used", "swap")),
       },
       load: {
-        load1: asNumber(load.load1),
-        load5: asNumber(load.load5),
-        load15: asNumber(load.load15),
+        load1: asNumber(pickNested(load, "load1", "load")),
+        load5: asNumber(pickNested(load, "load5")),
+        load15: asNumber(pickNested(load, "load15")),
       },
       disk: {
-        total: asNumber(disk.total, metrics.diskTotal || meta.disk_total),
-        used: asNumber(disk.used),
+        total: asNumber(pickNested(disk, "total", "disk_total"), metrics.diskTotal || meta.disk_total),
+        used: asNumber(pickNested(disk, "used", "disk")),
       },
       network: {
-        up: asNumber(network.up),
-        down: asNumber(network.down),
-        totalUp: asNumber(network.totalUp),
-        totalDown: asNumber(network.totalDown),
+        up: asNumber(pickNested(network, "up", "net_out")),
+        down: asNumber(pickNested(network, "down", "net_in")),
+        totalUp: asNumber(pickNested(network, "totalUp", "total_up", "net_total_up")),
+        totalDown: asNumber(pickNested(network, "totalDown", "total_down", "net_total_down")),
       },
       connections: {
-        tcp: asNumber(connections.tcp),
-        udp: asNumber(connections.udp),
+        tcp: asNumber(pickNested(connections, "tcp", "connections")),
+        udp: asNumber(pickNested(connections, "udp", "connections_udp")),
       },
-      uptime: asNumber(payload.uptime),
-      process: asNumber(payload.process),
-      updated_at: (payload.updated_at ?? payload.time) as string | number | undefined,
+      uptime: asNumber(pickNested(payload, "uptime")),
+      process: asNumber(pickNested(payload, "process")),
+      updated_at: pickNested<string | number>(payload, "updated_at", "updatedAt", "time"),
     };
   }
 
@@ -589,7 +601,7 @@ function normalizeRealtime(
     },
     uptime: asNumber(payload.uptime),
     process: asNumber(payload.process),
-    updated_at: (payload.updated_at ?? payload.time) as string | number | undefined,
+    updated_at: (payload.updated_at ?? payload.updatedAt ?? payload.time) as string | number | undefined,
   };
 }
 

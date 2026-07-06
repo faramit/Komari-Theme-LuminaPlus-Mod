@@ -266,6 +266,7 @@ const ChartCard = memo(function ChartCard({
   axisKind?: "default" | "percent" | "network" | "count";
   axisSize?: number;
 }) {
+  const chartRef = useRef<uPlot | null>(null);
   const dataRef = useRef<uPlot.AlignedData>([[]]);
   const [tooltip, setTooltip] = useState<ChartTooltipState>({
     show: false,
@@ -277,6 +278,13 @@ const ChartCard = memo(function ChartCard({
   const data = useMemo(() => metricData(points, keys), [points, keys]);
   useEffect(() => {
     dataRef.current = data;
+  }, [data]);
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    const times = data[0];
+    if (times.length < 2) return;
+    chart.setScale("x", { min: times[0], max: times[times.length - 1] });
   }, [data]);
   const baseOptions = useMemo(
     () =>
@@ -349,6 +357,7 @@ const ChartCard = memo(function ChartCard({
           options={chartOptions}
           data={data}
           resetScales={false}
+          onCreate={(chart) => { chartRef.current = chart; }}
         />
         <ChartTooltip tooltip={tooltip} />
       </div>
