@@ -52,6 +52,24 @@ interface ChartPoint {
   [key: string]: number | null;
 }
 
+interface RawRecord {
+  time: string | number;
+  cpu?: number | null;
+  ram?: number | null;
+  ram_total?: number | null;
+  swap?: number | null;
+  swap_total?: number | null;
+  disk?: number | null;
+  disk_total?: number | null;
+  net_in?: number | null;
+  net_out?: number | null;
+  net_total_down?: number | null;
+  net_total_up?: number | null;
+  connections?: number | null;
+  connections_udp?: number | null;
+  process?: number | null;
+  load?: number | null;
+}
 
 function metricData(points: ChartPoint[], keys: string[]): uPlot.AlignedData {
   const times = points.map((point) => point.time);
@@ -322,7 +340,7 @@ export function LoadChart({
   const [connectNulls, setConnectNulls] = useState(false);
 
   // Emerald-style data layer
-  const [remoteData, setRemoteData] = useState<any[]>([]);
+  const [remoteData, setRemoteData] = useState<RawRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -335,24 +353,35 @@ export function LoadChart({
     setError(null);
     isInitialLoad.current = true;
 
-    let cancelled = false;
+    const controller = new AbortController();
+    const signal = controller.signal;
 
     const fetchData = async () => {
       if (isRealtime) {
         if (isInitialLoad.current) setLoading(true);
         setError(null);
         try {
-          const result = await getRpc2Client().call(
-            "common:getNodeRecentStatus",
-            { uuid },
-          );
-          if (cancelled) return;
-          const records: any[] = ((result as any)?.records || [])
-            .sort((a: any, b: any) => toChartSeconds(a.time) - toChartSeconds(b.time))
-            .slice(-REALTIME_MAX_RECORDS);
+          let records: RawRecord[];
+          try {
+            const result = await getRpc2Client().call(
+              "common:getNodeRecentStatus",
+              { uuid },
+              { signal },
+            );
+            if (signal.aborted) return;
+            records = ((result as any)?.records || [])
+              .sort((a: RawRecord, b: RawRecord) => toChartSeconds(a.time) - toChartSeconds(b.time))
+              .slice(-REALTIME_MAX_RECORDS);
+          } catch {
+            if (signal.aborted) return;
+            const fallback = await getLoadRecords(uuid, 1, signal);
+            if (signal.aborted) return;
+            records = (fallback.records || [])
+              .sort((a, b) => toChartSeconds(a.time) - toChartSeconds(b.time));
+          }
           setRemoteData(records);
         } catch (err) {
-          if (cancelled) return;
+          if (signal.aborted) return;
           setError(err instanceof Error ? err.message : "获取数据失败");
           setRemoteData([]);
         } finally {
@@ -363,13 +392,13 @@ export function LoadChart({
         setLoading(true);
         setError(null);
         try {
-          const result = await getLoadRecords(uuid, hours);
-          if (cancelled) return;
-          const records: any[] = (result.records || [])
-            .sort((a: any, b: any) => toChartSeconds(a.time) - toChartSeconds(b.time));
+          const result = await getLoadRecords(uuid, hours, signal);
+          if (signal.aborted) return;
+          const records: RawRecord[] = (result.records || [])
+            .sort((a, b) => toChartSeconds(a.time) - toChartSeconds(b.time));
           setRemoteData(records);
         } catch (err) {
-          if (cancelled) return;
+          if (signal.aborted) return;
           setError(err instanceof Error ? err.message : "获取数据失败");
           setRemoteData([]);
         } finally {
@@ -383,24 +412,24 @@ export function LoadChart({
     if (isRealtime) {
       const timer = setInterval(fetchData, REALTIME_POLL_INTERVAL);
       return () => {
-        cancelled = true;
+        controller.abort();
         clearInterval(timer);
       };
     }
 
-    return () => { cancelled = true; };
+    return () => controller.abort();
   }, [uuid, hours, active, isRealtime, refreshKey]);
 
   const chartData = useMemo<ChartPoint[]>(() => {
     if (!remoteData.length) return [];
     const converted = remoteData
-      .filter((r: any) => r.time)
-      .map((r: any) => ({
+      .filter((r) => r.time)
+      .map((r) => ({
         time: toChartSeconds(r.time),
         cpu: r.cpu ?? null,
-        ram: r.ram_total > 0 ? (r.ram / r.ram_total) * 100 : 0,
-        swap: r.swap_total > 0 ? (r.swap / r.swap_total) * 100 : 0,
-        disk: r.disk_total > 0 ? (r.disk / r.disk_total) * 100 : 0,
+        ram: (r.ram_total ?? 0) > 0 ? ((r.ram ?? 0) / (r.ram_total ?? 1)) * 100 : 0,
+        swap: (r.swap_total ?? 0) > 0 ? ((r.swap ?? 0) / (r.swap_total ?? 1)) * 100 : 0,
+        disk: (r.disk_total ?? 0) > 0 ? ((r.disk ?? 0) / (r.disk_total ?? 1)) * 100 : 0,
         netIn: r.net_in ?? null,
         netOut: r.net_out ?? null,
         connections: r.connections ?? null,
@@ -408,7 +437,7 @@ export function LoadChart({
         process: r.process ?? null,
         load: r.load ?? null,
       }))
-      .sort((a: ChartPoint, b: ChartPoint) => a.time - b.time);
+      .sort((a, b) => a.time - b.time);
     if (isRealtime) return converted;
 
     let intervalSec: number;

@@ -306,6 +306,7 @@ export async function getAdminClients(): Promise<AdminClient[]> {
 export async function getLoadRecords(
   uuid: string,
   hours = 6,
+  signal?: AbortSignal,
 ): Promise<LoadRecordsResponse> {
   try {
     const maxCount = getRecordsMaxCount(hours, LOAD_RECORDS_PER_HOUR);
@@ -318,6 +319,7 @@ export async function getLoadRecords(
         maxCount,
       },
       RpcRecordsSchema,
+      { signal },
     );
     return normalizeRpcLoadRecords(uuid, payload);
   } catch {
@@ -327,6 +329,7 @@ export async function getLoadRecords(
         count: z.number().default(0),
         records: z.array(LoadRecordSchema).default([]),
       }),
+      { signal },
     )) as LoadRecordsResponse;
   }
 }
