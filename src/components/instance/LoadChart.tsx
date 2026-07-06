@@ -1,7 +1,9 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import UplotReact from "uplot-react";
 import type uPlot from "uplot";
 import { ArrowDown, ArrowUp, Cpu, Gauge, HardDrive, MemoryStick, Network, RefreshCw, Workflow } from "lucide-react";
+import { useLoadRecords } from "@/hooks/useRecords";
+import { useNodeMetrics } from "@/hooks/useNode";
 import { InstancePanel, InstanceChartLoading } from "./InstancePanel";
 import {
   buildChartTooltipHooks,
@@ -14,14 +16,18 @@ import {
   type ChartTooltipState,
 } from "./chartShared";
 import { ChartTooltip, SwitchToggle } from "./ChartParts";
-import { fillMissingTimePoints } from "./chartData";
+import {
+  fillMissingMetricPoints,
+  interpolateMetricGaps,
+} from "./chartData";
 import { formatBytes, formatTrafficRateLabel } from "@/utils/format";
 import { usePreferences } from "@/hooks/usePreferences";
-import { getLoadRecords } from "@/services/api";
-import { getRpc2Client } from "@/services/rpc2Client";
+import type { NodeMetrics } from "@/types/komari";
 
-const REALTIME_POLL_INTERVAL = 3000;
-const REALTIME_MAX_RECORDS = 150;
+const LOAD_HISTORY_SAMPLE_LIMIT = 360;
+const LOAD_HISTORY_RENDER_LIMIT = 720;
+const REALTIME_HISTORY_SEED_LIMIT = 120;
+const REALTIME_SAMPLE_LIMIT = 600;
 
 const CPU_KEYS = ["cpu"];
 const CPU_COLORS = [CHART_PALETTE.cpu];
@@ -45,35 +51,51 @@ const SERIES_LABELS: Record<string, string> = {
   connections: "TCP",
   udp: "UDP",
   process: "进程",
-  load: "负载",
 };
+const LOAD_INTERPOLATE_KEYS = [
+  "cpu",
+  "ram",
+  "swap",
+  "disk",
+  "netIn",
+  "netOut",
+  "connections",
+  "udp",
+  "process",
+];
+
 interface ChartPoint {
   time: number;
   [key: string]: number | null;
 }
 
-interface RawRecord {
-  time: string | number;
-  cpu?: number | null;
-  ram?: number | null;
-  ram_total?: number | null;
-  swap?: number | null;
-  swap_total?: number | null;
-  disk?: number | null;
-  disk_total?: number | null;
-  net_in?: number | null;
-  net_out?: number | null;
-  net_total_down?: number | null;
-  net_total_up?: number | null;
-  connections?: number | null;
-  connections_udp?: number | null;
-  process?: number | null;
-  load?: number | null;
-}
 
 function metricData(points: ChartPoint[], keys: string[]): uPlot.AlignedData {
   const times = points.map((point) => point.time);
   return [times, ...keys.map((key) => points.map((point) => point[key] ?? null))] as uPlot.AlignedData;
+}
+
+function getHistoryRenderLimit(hours: number) {
+  if (hours <= 4) return LOAD_HISTORY_SAMPLE_LIMIT;
+  return LOAD_HISTORY_RENDER_LIMIT;
+}
+
+function downsamplePoints(points: ChartPoint[], limit: number) {
+  if (points.length <= limit || limit < 2) return points;
+
+  const result: ChartPoint[] = [];
+  const lastIndex = points.length - 1;
+  const step = lastIndex / (limit - 1);
+  let previousIndex = -1;
+
+  for (let index = 0; index < limit; index += 1) {
+    const sourceIndex = Math.min(lastIndex, Math.round(index * step));
+    if (sourceIndex === previousIndex) continue;
+    result.push(points[sourceIndex]);
+    previousIndex = sourceIndex;
+  }
+
+  return result;
 }
 
 function formatRangeSummary(hours: number) {
@@ -84,6 +106,21 @@ function formatRangeSummary(hours: number) {
 
 function getSeriesLabel(key: string) {
   return SERIES_LABELS[key] ?? key;
+}
+
+function pointFromNode(node: NodeMetrics): ChartPoint {
+  return {
+    time: Date.now() / 1000,
+    cpu: node.cpuPct,
+    ram: node.ramTotal > 0 ? (node.ramUsed / node.ramTotal) * 100 : 0,
+    swap: node.swapTotal > 0 ? (node.swapUsed / node.swapTotal) * 100 : 0,
+    disk: node.diskTotal > 0 ? (node.diskUsed / node.diskTotal) * 100 : 0,
+    netIn: node.netDown,
+    netOut: node.netUp,
+    connections: node.connectionsTcp,
+    udp: node.connectionsUdp,
+    process: node.process,
+  };
 }
 
 function formatTooltipValue(key: string, value: number | null | undefined, unit: string) {
@@ -226,7 +263,6 @@ const ChartCard = memo(function ChartCard({
   axisKind?: "default" | "percent" | "network" | "count";
   axisSize?: number;
 }) {
-  const chartRef = useRef<uPlot | null>(null);
   const dataRef = useRef<uPlot.AlignedData>([[]]);
   const [tooltip, setTooltip] = useState<ChartTooltipState>({
     show: false,
@@ -238,13 +274,6 @@ const ChartCard = memo(function ChartCard({
   const data = useMemo(() => metricData(points, keys), [points, keys]);
   useEffect(() => {
     dataRef.current = data;
-  }, [data]);
-  useEffect(() => {
-    const chart = chartRef.current;
-    if (!chart) return;
-    const times = data[0];
-    if (times.length < 2) return;
-    chart.setScale("x", { min: times[0], max: times[times.length - 1] });
   }, [data]);
   const baseOptions = useMemo(
     () =>
@@ -317,7 +346,6 @@ const ChartCard = memo(function ChartCard({
           options={chartOptions}
           data={data}
           resetScales={false}
-          onCreate={(chart) => { chartRef.current = chart; }}
         />
         <ChartTooltip tooltip={tooltip} />
       </div>
@@ -334,150 +362,86 @@ export function LoadChart({
   hours: number;
   active?: boolean;
 }) {
+  const queryHours = hours === 0 ? 1 : hours;
+  const { data, isLoading, refetch } = useLoadRecords(uuid, queryHours, active);
   const isRealtime = hours === 0;
+  const node = useNodeMetrics(uuid, isRealtime && active);
   const { resolvedAppearance } = usePreferences();
   const { w, h } = useResponsiveChartSize("grid");
+  const [realtimePoints, setRealtimePoints] = useState<ChartPoint[]>([]);
   const [connectNulls, setConnectNulls] = useState(false);
 
-  // Emerald-style data layer
-  const [remoteData, setRemoteData] = useState<RawRecord[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
-  const isInitialLoad = useRef(true);
+  useEffect(() => {
+    if (!active || !isRealtime || !node) return;
+    const point = pointFromNode(node);
+    setRealtimePoints((prev) => {
+      const last = prev[prev.length - 1];
+      if (last && Math.abs(last.time - point.time) < 1) return prev;
+      return [...prev, point].slice(-REALTIME_SAMPLE_LIMIT);
+    });
+  }, [active, isRealtime, node]);
 
   useEffect(() => {
-    if (!active || !uuid) return;
+    setRealtimePoints([]);
+  }, [hours, uuid]);
 
-    setRemoteData([]);
-    setError(null);
-    isInitialLoad.current = true;
-
-    const controller = new AbortController();
-    const signal = controller.signal;
-
-    const fetchData = async () => {
-      if (isRealtime) {
-        if (isInitialLoad.current) setLoading(true);
-        setError(null);
-        try {
-          let records: RawRecord[];
-          try {
-            const result = await getRpc2Client().call(
-              "common:getNodeRecentStatus",
-              { uuid },
-              { signal },
-            );
-            if (signal.aborted) return;
-            records = ((result as any)?.records || [])
-              .sort((a: RawRecord, b: RawRecord) => toChartSeconds(a.time) - toChartSeconds(b.time))
-              .slice(-REALTIME_MAX_RECORDS);
-          } catch {
-            if (signal.aborted) return;
-            const fallback = await getLoadRecords(uuid, 1, signal);
-            if (signal.aborted) return;
-            records = (fallback.records || [])
-              .sort((a, b) => toChartSeconds(a.time) - toChartSeconds(b.time));
-          }
-          setRemoteData(records);
-        } catch (err) {
-          if (signal.aborted) return;
-          setError(err instanceof Error ? err.message : "获取数据失败");
-          setRemoteData([]);
-        } finally {
-          setLoading(false);
-          isInitialLoad.current = false;
-        }
-      } else {
-        setLoading(true);
-        setError(null);
-        try {
-          const result = await getLoadRecords(uuid, hours, signal);
-          if (signal.aborted) return;
-          const records: RawRecord[] = (result.records || [])
-            .sort((a, b) => toChartSeconds(a.time) - toChartSeconds(b.time));
-          setRemoteData(records);
-        } catch (err) {
-          if (signal.aborted) return;
-          setError(err instanceof Error ? err.message : "获取数据失败");
-          setRemoteData([]);
-        } finally {
-          setLoading(false);
-        }
-      }
-    };
-
-    fetchData();
-
-    if (isRealtime) {
-      const timer = setInterval(fetchData, REALTIME_POLL_INTERVAL);
-      return () => {
-        controller.abort();
-        clearInterval(timer);
-      };
-    }
-
-    return () => controller.abort();
-  }, [uuid, hours, active, isRealtime, refreshKey]);
-
-  const chartData = useMemo<ChartPoint[]>(() => {
-    if (!remoteData.length) return [];
-    const converted = remoteData
-      .filter((r) => r.time)
-      .map((r) => ({
-        time: toChartSeconds(r.time),
-        cpu: r.cpu ?? null,
-        ram: (r.ram_total ?? 0) > 0 ? ((r.ram ?? 0) / (r.ram_total ?? 1)) * 100 : 0,
-        swap: (r.swap_total ?? 0) > 0 ? ((r.swap ?? 0) / (r.swap_total ?? 1)) * 100 : 0,
-        disk: (r.disk_total ?? 0) > 0 ? ((r.disk ?? 0) / (r.disk_total ?? 1)) * 100 : 0,
-        netIn: r.net_in ?? null,
-        netOut: r.net_out ?? null,
-        connections: r.connections ?? null,
-        udp: r.connections_udp ?? null,
-        process: r.process ?? null,
-        load: r.load ?? null,
+  const historyPoints = useMemo<ChartPoint[]>(() => {
+    const records = [...(data?.records ?? [])];
+    const rawPoints = records
+      .map((record) => ({
+        time: toChartSeconds(record.time),
+        cpu: record.cpu,
+        ram: record.ram_total > 0 ? (record.ram / record.ram_total) * 100 : 0,
+        swap: record.swap_total > 0 ? (record.swap / record.swap_total) * 100 : 0,
+        disk: record.disk_total > 0 ? (record.disk / record.disk_total) * 100 : 0,
+        netIn: record.net_in,
+        netOut: record.net_out,
+        connections: record.connections,
+        udp: record.connections_udp,
+        process: record.process,
       }))
+      .filter((point) => point.time > 0)
       .sort((a, b) => a.time - b.time);
-    if (isRealtime) return converted;
+    const sampled = downsamplePoints(rawPoints, getHistoryRenderLimit(hours));
+    const filled = fillMissingMetricPoints(sampled);
+    // 共享 helper 现在把缺失格子标成 `number | null | undefined` (ping 路径需要 undefined
+    // 标记 off-phase 列)。LoadChart 只用 null 填充，运行时不会出现 undefined——这里收窄回来。
+    return interpolateMetricGaps(filled, LOAD_INTERPOLATE_KEYS) as ChartPoint[];
+  }, [data, hours]);
 
-    let intervalSec: number;
-    let maxGap: number;
-    if (hours <= 4) { intervalSec = 60; maxGap = 120; }
-    else if (hours > 120) { intervalSec = 3600; maxGap = 7200; }
-    else { intervalSec = 900; maxGap = 1800; }
-
-    return fillMissingTimePoints(converted, intervalSec, hours * 3600, maxGap) as ChartPoint[];
-  }, [remoteData, isRealtime, hours]);
-
-  const points = chartData;
-  const latestRaw = remoteData[remoteData.length - 1] ?? null;
+  const points = useMemo<ChartPoint[]>(() => {
+    if (isRealtime) {
+      const initial = historyPoints.slice(-REALTIME_HISTORY_SEED_LIMIT);
+      const merged = [...initial, ...realtimePoints].sort((a, b) => a.time - b.time);
+      const deduped = merged.filter((point, index, arr) => {
+        const next = arr[index + 1];
+        return !next || Math.abs(next.time - point.time) >= 1;
+      });
+      return deduped.slice(-REALTIME_SAMPLE_LIMIT);
+    }
+    return historyPoints;
+  }, [historyPoints, isRealtime, realtimePoints]);
 
   const rangeSummary = formatRangeSummary(hours);
-  const sampleSummary = `${points.length} 个点`;
+  const sourceRecordCount = data?.records.length ?? 0;
+  const wasDownsampled = !isRealtime && sourceRecordCount > getHistoryRenderLimit(hours);
+  const sampleSummary = isRealtime
+    ? `${points.length} 个点`
+    : wasDownsampled
+      ? `${points.length} / ${sourceRecordCount} 个点`
+      : `${points.length} 个点`;
   const coverageSummary = points.length
     ? `${formatChartCoverageTime(points[0].time)} - ${formatChartCoverageTime(points[points.length - 1].time)}`
     : "—";
 
-  const handleRefresh = useCallback(() => {
-    setRefreshKey((k) => k + 1);
-  }, []);
-
-  if (loading && !isRealtime) {
+  if (isLoading) {
     return <InstanceChartLoading title="负载图表" />;
-  }
-
-  if (error) {
-    return (
-      <InstancePanel title="负载图表">
-        <div className="instance-empty">{error}</div>
-      </InstancePanel>
-    );
   }
 
   if (!points.length) {
     return (
       <InstancePanel title="负载图表">
-        <div className="instance-empty">{isRealtime ? "等待实时数据..." : "暂无负载历史数据"}</div>
+        <div className="instance-empty">暂无负载历史数据</div>
       </InstancePanel>
     );
   }
@@ -500,7 +464,7 @@ export function LoadChart({
             active={connectNulls}
             onToggle={() => setConnectNulls((value) => !value)}
           />
-          <button type="button" className="instance-toggle-button" onClick={handleRefresh}>
+          <button type="button" className="instance-toggle-button" onClick={() => void refetch()}>
             <RefreshCw size={14} />
             刷新
           </button>
@@ -515,9 +479,9 @@ export function LoadChart({
           title="CPU"
           uuid={uuid}
           value={
-            latestRaw?.cpu != null
-              ? `${latestRaw.cpu.toFixed(2)}%`
-              : "—"
+            isRealtime && node
+              ? `${node.cpuPct.toFixed(2)}%`
+              : `${(points[points.length - 1]?.cpu ?? 0).toFixed(2)}%`
           }
           note="使用率"
           points={points}
@@ -536,14 +500,20 @@ export function LoadChart({
           title="内存"
           uuid={uuid}
           value={
-            latestRaw?.ram != null && latestRaw?.ram_total != null
-              ? `${formatBytes(latestRaw.ram)} / ${formatBytes(latestRaw.ram_total)}`
-              : "—"
+            isRealtime && node
+              ? `${formatBytes(node.ramUsed)} / ${formatBytes(node.ramTotal)}`
+              : data?.records.length
+                ? `${formatBytes(data.records[data.records.length - 1]?.ram ?? 0)} / ${formatBytes(data.records[data.records.length - 1]?.ram_total ?? 0)}`
+                : "—"
           }
           note={
-            latestRaw?.swap_total != null && latestRaw.swap_total > 0
-              ? `Swap ${formatBytes(latestRaw.swap)} / ${formatBytes(latestRaw.swap_total)}`
-              : "Swap 无"
+            isRealtime && node
+              ? node.swapTotal
+                ? `Swap ${formatBytes(node.swapUsed)} / ${formatBytes(node.swapTotal)}`
+                : "Swap 无"
+              : data?.records.length && (data.records[data.records.length - 1]?.swap_total ?? 0) > 0
+                ? `Swap ${formatBytes(data.records[data.records.length - 1]?.swap ?? 0)} / ${formatBytes(data.records[data.records.length - 1]?.swap_total ?? 0)}`
+                : "Swap 无"
           }
           points={points}
           keys={MEMORY_KEYS}
@@ -561,9 +531,11 @@ export function LoadChart({
           title="磁盘"
           uuid={uuid}
           value={
-            latestRaw?.disk != null && latestRaw?.disk_total != null
-              ? `${formatBytes(latestRaw.disk)} / ${formatBytes(latestRaw.disk_total)}`
-              : "—"
+            isRealtime && node
+              ? `${formatBytes(node.diskUsed)} / ${formatBytes(node.diskTotal)}`
+              : data?.records.length
+                ? `${formatBytes(data.records[data.records.length - 1]?.disk ?? 0)} / ${formatBytes(data.records[data.records.length - 1]?.disk_total ?? 0)}`
+                : "—"
           }
           note="已用空间"
           points={points}
@@ -582,14 +554,16 @@ export function LoadChart({
           title="网络"
           uuid={uuid}
           value={
-            latestRaw?.net_in != null && latestRaw?.net_out != null
-              ? `${formatTrafficRateLabel(latestRaw.net_in)} / ${formatTrafficRateLabel(latestRaw.net_out)}`
-              : "—"
+            isRealtime && node
+              ? `${formatTrafficRateLabel(node.netDown)} / ${formatTrafficRateLabel(node.netUp)}`
+              : data?.records.length
+                ? `${formatTrafficRateLabel(data.records[data.records.length - 1]?.net_in ?? 0)} / ${formatTrafficRateLabel(data.records[data.records.length - 1]?.net_out ?? 0)}`
+                : "—"
           }
           note={
             <span className="instance-overview-multi">
-              <span className="inline-flex items-center gap-1"><ArrowDown size={11} />{latestRaw?.net_total_down != null ? formatBytes(latestRaw.net_total_down) : "—"}</span>
-              <span className="inline-flex items-center gap-1"><ArrowUp size={11} />{latestRaw?.net_total_up != null ? formatBytes(latestRaw.net_total_up) : "—"}</span>
+              <span className="inline-flex items-center gap-1"><ArrowDown size={11} />{isRealtime && node ? formatBytes(node.trafficDown) : data?.records.length ? formatBytes(data.records[data.records.length - 1]?.net_total_down ?? 0) : "—"}</span>
+              <span className="inline-flex items-center gap-1"><ArrowUp size={11} />{isRealtime && node ? formatBytes(node.trafficUp) : data?.records.length ? formatBytes(data.records[data.records.length - 1]?.net_total_up ?? 0) : "—"}</span>
             </span>
           }
           points={points}
@@ -608,9 +582,11 @@ export function LoadChart({
           title="连接数"
           uuid={uuid}
           value={
-            latestRaw?.connections != null && latestRaw?.connections_udp != null
-              ? `TCP ${Math.round(latestRaw.connections)} / UDP ${Math.round(latestRaw.connections_udp)}`
-              : "—"
+            isRealtime && node
+              ? `TCP ${node.connectionsTcp} / UDP ${node.connectionsUdp}`
+              : data?.records.length
+                ? `TCP ${Math.round(data.records[data.records.length - 1]?.connections ?? 0)} / UDP ${Math.round(data.records[data.records.length - 1]?.connections_udp ?? 0)}`
+                : "—"
           }
           note="连接"
           points={points}
@@ -628,14 +604,18 @@ export function LoadChart({
           title="进程"
           uuid={uuid}
           value={
-            latestRaw?.process != null
-              ? Math.round(latestRaw.process).toString()
-              : "—"
+            isRealtime && node
+              ? node.process.toString()
+              : data?.records.length
+                ? Math.round(data.records[data.records.length - 1]?.process ?? 0).toString()
+                : "—"
           }
           note={
-            latestRaw?.load != null
-              ? `负载 ${latestRaw.load.toFixed(2)}`
-              : "—"
+            isRealtime && node
+              ? `负载 ${node.load1.toFixed(2)} | ${node.load5.toFixed(2)} | ${node.load15.toFixed(2)}`
+              : data?.records.length
+                ? `负载 ${(data.records[data.records.length - 1]?.load ?? 0).toFixed(2)}`
+                : "—"
           }
           points={points}
           keys={PROCESS_KEYS}
