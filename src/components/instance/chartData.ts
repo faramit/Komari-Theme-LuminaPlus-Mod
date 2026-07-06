@@ -462,6 +462,56 @@ export function downsampleAligned(
 // 按点数的滑动平均：每个数值点取前后各 floor(window/2) 个点取均值。降采样后各时段点数一致，
 // 用固定点窗能让 1h/4h/1d 获得一致的平滑度（按时间窗会因每点时间跨度不同而力度不均）。
 // null/undefined（断点/off-phase）原样保留。
+/**
+ * 填充缺失的时间点（Emerald 方案）
+ * 生成均匀时间网格，对齐到最后一个数据点。匹配成功则保留数据，失败则插入全 null 占位点。
+ */
+export function fillMissingTimePoints(
+  data: TimedMetricPoint[],
+  intervalSec: number,
+  totalSeconds: number | null,
+  matchToleranceSec?: number,
+): TimedMetricPoint[] {
+  if (!data.length) return [];
+
+  const sorted = [...data].sort((a, b) => a.time - b.time);
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+
+  const end = last.time;
+  const interval = intervalSec;
+
+  const start = totalSeconds !== null && totalSeconds > 0
+    ? end - totalSeconds + interval
+    : first.time;
+
+  const times: number[] = [];
+  for (let t = start; t <= end; t += interval) {
+    times.push(t);
+  }
+
+  const nullPoint: Record<string, number | null> = { time: 0 };
+  for (const key of Object.keys(first)) {
+    if (key !== "time") nullPoint[key] = null;
+  }
+
+  const matchTolerance = matchToleranceSec ?? intervalSec;
+  let dataIdx = 0;
+
+  return times.map((t) => {
+    while (dataIdx < sorted.length && sorted[dataIdx].time < t - matchTolerance) {
+      dataIdx++;
+    }
+
+    const found = dataIdx < sorted.length && Math.abs(sorted[dataIdx].time - t) <= matchTolerance
+      ? sorted[dataIdx]
+      : null;
+
+    if (found) return { ...found, time: t };
+    return { ...nullPoint, time: t } as TimedMetricPoint;
+  });
+}
+
 export function smoothByCount(
   perTask: Array<Array<number | null | undefined>>,
   windowPoints: number,
