@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { useQueryClient } from "@tanstack/react-query";
 import { clearCssColorCache } from "@/components/node/CanvasStrip";
 import { usePublicConfig } from "@/hooks/usePublicConfig";
+import { usePreferences } from "@/hooks/usePreferences";
 import { saveThemeSettings } from "@/services/api";
 import type { PublicConfig } from "@/types/komari";
 
@@ -91,6 +92,12 @@ export const METRIC_COLOR_META: ReadonlyArray<{
 
 export type MetricColors = Partial<Record<MetricColorKey, string>>;
 
+/** 明暗双主题分别保存的配色。 */
+export type ThemeMetricColors = {
+  light: MetricColors;
+  dark: MetricColors;
+};
+
 const SETTINGS_KEY = "metricColors";
 const HEX = /^#[0-9a-f]{6}$/;
 
@@ -100,19 +107,39 @@ function toInputHex(value: string): string {
   return HEX.test(v) ? v : "#888888";
 }
 
-/** 从后端 theme_settings 解析出已保存的指标配色（校验 hex 与已知 key）。 */
+/**
+ * 从后端 theme_settings 解析出已保存的指标配色。
+ * 新格式: { light: { cpu: "#hex" }, dark: { cpu: "#hex" } }
+ * 旧格式(兼容): { cpu: "#hex" } → 双主题都应用该色 */
 export function readMetricColorsFromSettings(
   settings: Record<string, unknown> | undefined,
-): MetricColors {
+): ThemeMetricColors {
   const raw = settings?.[SETTINGS_KEY];
-  if (!raw || typeof raw !== "object") return {};
+  if (!raw || typeof raw !== "object") return { light: {}, dark: {} };
   const source = raw as Record<string, unknown>;
-  const out: MetricColors = {};
+
+  // 新格式：含 light/dark 键
+  if ("light" in source || "dark" in source) {
+    const out: ThemeMetricColors = { light: {}, dark: {} };
+    for (const theme of ["light", "dark"] as const) {
+      const sub = source[theme];
+      if (sub && typeof sub === "object") {
+        for (const { key } of METRIC_COLOR_META) {
+          const v = (sub as Record<string, unknown>)[key];
+          if (typeof v === "string" && HEX.test(v.toLowerCase())) out[theme][key] = v.toLowerCase();
+        }
+      }
+    }
+    return out;
+  }
+
+  // 旧格式: 单层 { cpu: "#hex" } → 应用到两个主题
+  const flat: MetricColors = {};
   for (const { key } of METRIC_COLOR_META) {
     const v = source[key];
-    if (typeof v === "string" && HEX.test(v.toLowerCase())) out[key] = v.toLowerCase();
+    if (typeof v === "string" && HEX.test(v.toLowerCase())) flat[key] = v.toLowerCase();
   }
-  return out;
+  return { light: { ...flat }, dark: { ...flat } };
 }
 
 // ---- 已应用配色：写 CSS 变量 + 维护 version 让 canvas 卡片即时重绘 ----
@@ -134,6 +161,14 @@ function bumpVersionThrottled() {
     version += 1;
     for (const l of listeners) l();
   });
+}
+
+/** 无论去重/编辑状态如何，强制清除 <html> 上所有指标色 CSS 变量内联覆盖。 */
+function clearMetricColorVars() {
+  const root = document.documentElement;
+  for (const { cssVar } of METRIC_COLOR_META) root.style.removeProperty(cssVar);
+  clearCssColorCache();
+  bumpVersionThrottled();
 }
 
 /** 把一组配色应用到 <html>（CSS 变量即时覆盖；canvas 经 version 重绘）。相同配色不重复应用。 */
@@ -172,91 +207,108 @@ export function readEffectiveColors(): Record<MetricColorKey, string> {
   return out;
 }
 
-/** 全局：把后端保存的配色应用到所有访客（在 AppShell 挂载一次）。 */
+/** 全局：把后端保存的配色应用到所有访客（在 AppShell 挂载一次）。明暗切换时自动切换对应主题的配色。 */
 export function useMetricColorsSync() {
   const { data: config } = usePublicConfig();
-  const colors = useMemo(
+  const { resolvedAppearance } = usePreferences();
+  const themeColors = useMemo(
     () => readMetricColorsFromSettings(config?.theme_settings),
     [config?.theme_settings],
   );
   useEffect(() => {
-    // 管理员正在编辑配色时,预览由编辑器驱动;此处别用服务端值覆盖,避免一次 refetch
-    // 把正在拖动的颜色闪回旧值。保存成功会清除标记并 refetch,届时这里再采纳新值。
+    // 先无条件清除所有旧覆盖色，让 <html> 回退到 CSS 默认值
+    // （var(--text-primary) 按 data-appearance 自动解析为对应主题色）。
+    clearMetricColorVars();
+    // 不在编辑会话中时再应用已保存的配色覆盖。正在编辑时编辑器负责预览，
+    // 此处不清掉则旧覆盖会被编辑器保留，切主题后就能看到旧主题的覆盖色。
     if (metricColorEditing) return;
-    applyMetricColors(colors);
-  }, [colors]);
+    applyMetricColors(themeColors[resolvedAppearance]);
+  }, [themeColors, resolvedAppearance]);
 }
 
-/** 管理员编辑：改色即时预览 + 防抖保存到后端 theme_settings。 */
+/** 管理员编辑：改色即时预览 + 防抖保存到后端 theme_settings。
+ *  明暗主题分别独立保存编辑。 */
 export function useMetricColorsEditor() {
   const { data: config } = usePublicConfig();
+  const { resolvedAppearance } = usePreferences();
   const queryClient = useQueryClient();
-  const serverColors = useMemo(
+  const serverThemeColors = useMemo(
     () => readMetricColorsFromSettings(config?.theme_settings),
     [config?.theme_settings],
   );
 
-  const [draft, setDraft] = useState<MetricColors>(serverColors);
+  const [drafts, setDrafts] = useState<ThemeMetricColors>(serverThemeColors);
   const [saveError, setSaveError] = useState(false);
-  const draftRef = useRef<MetricColors>(serverColors);
+  const draftsRef = useRef<ThemeMetricColors>(serverThemeColors);
   const saveTimer = useRef<number | null>(null);
-  const serverColorsRef = useRef<MetricColors>(serverColors);
-  // 仍在防抖窗口内、尚未落库的草稿；卸载时据此补存，避免快速关闭面板丢失改动。
-  const pendingColorsRef = useRef<MetricColors | null>(null);
-  // 组件是否仍挂载——异步保存回来后据此决定是否还能 setState。
+  const serverThemeColorsRef = useRef<ThemeMetricColors>(serverThemeColors);
+  const pendingDraftsRef = useRef<ThemeMetricColors | null>(null);
   const mountedRef = useRef(true);
-  // 串行化保存:同一时刻只允许一个请求在飞。在飞期间到来的保存只记录「最新一笔」
-  // (queuedColorsRef),当前请求落库后再发,杜绝慢的旧请求最后落库覆盖掉新颜色。
   const inFlightRef = useRef(false);
   const hasQueuedRef = useRef(false);
-  const queuedColorsRef = useRef<MetricColors>({});
+  const queuedDraftsRef = useRef<ThemeMetricColors>({ light: {}, dark: {} });
 
-  // 后端配色变化（含自身保存后的 refetch）时同步草稿。但正在编辑(拖动/防抖/保存未回环)
-  // 时本地草稿压过服务端:不让一次无关的 refetch 返回旧 metricColors 把草稿打回旧值。
-  // 保存成功会清除编辑标记并触发 refetch,届时再采纳(此时服务端已等于本地草稿)。
+  // 正在编辑的主题 = 当前外观
+  const editingTheme: "light" | "dark" = resolvedAppearance;
+
+  // 后端配色变化时同步草稿。正在编辑时本地草稿压过服务端。
   useEffect(() => {
     if (metricColorEditing) return;
-    serverColorsRef.current = serverColors;
-    draftRef.current = serverColors;
-    setDraft(serverColors);
-  }, [serverColors]);
+    serverThemeColorsRef.current = serverThemeColors;
+    draftsRef.current = serverThemeColors;
+    setDrafts(serverThemeColors);
+  }, [serverThemeColors]);
+
+  // 外观在编辑过程中切换时，应用新主题的草稿到 DOM 预览
+  const prevThemeRef = useRef(editingTheme);
+  useEffect(() => {
+    if (prevThemeRef.current !== editingTheme) {
+      prevThemeRef.current = editingTheme;
+      if (metricColorEditing) {
+        clearMetricColorVars();
+        applyMetricColors(draftsRef.current[editingTheme]);
+      }
+    }
+  }, [editingTheme]);
 
   const finishEditing = useCallback((restoreSaved = false) => {
     metricColorEditing = false;
-    if (restoreSaved) applyMetricColors(serverColorsRef.current);
+    if (restoreSaved) {
+      clearMetricColorVars();
+      const t = document.documentElement.dataset.appearance === "dark" ? "dark" : "light";
+      applyMetricColors(serverThemeColorsRef.current[t]);
+    }
   }, []);
 
-  // 真正写后端。供防抖计时器与卸载补存两处复用。saveError 只在仍挂载时更新——
-  // 即便请求在飞途中组件卸载（防抖已触发那段窄窗口），回来也不会对已卸载组件 setState。
-  // 串行化:在飞期间再调只暂存最新一笔,当前落库后接着发,旧请求不会覆盖新颜色。
   const persist = useCallback(
-    async (colors: MetricColors) => {
+    async (d: ThemeMetricColors) => {
       if (!config) {
         if (!mountedRef.current) finishEditing(true);
         return;
       }
       if (inFlightRef.current) {
-        queuedColorsRef.current = colors;
+        queuedDraftsRef.current = d;
         hasQueuedRef.current = true;
         return;
       }
       inFlightRef.current = true;
-      let current = colors;
+      let current = d;
       let lastOk = false;
       let savedAny = false;
       try {
         for (;;) {
-          // 每轮都取最新的 public 缓存做合并基:避免拿过期 theme_settings 回写,
-          // 把主题管理页同期保存的其它设置覆盖掉。
           const latest = queryClient.getQueryData<PublicConfig>(["public"]) ?? config;
           const nextSettings: Record<string, unknown> = { ...(latest.theme_settings ?? {}) };
-          if (Object.keys(current).length > 0) nextSettings[SETTINGS_KEY] = current;
-          else delete nextSettings[SETTINGS_KEY];
+          if (Object.keys(current.light).length > 0 || Object.keys(current.dark).length > 0) {
+            nextSettings[SETTINGS_KEY] = current;
+          } else {
+            delete nextSettings[SETTINGS_KEY];
+          }
           try {
             await saveThemeSettings(latest.theme, nextSettings);
             lastOk = true;
             savedAny = true;
-            serverColorsRef.current = current;
+            serverThemeColorsRef.current = current;
             if (mountedRef.current) setSaveError(false);
           } catch {
             lastOk = false;
@@ -264,7 +316,7 @@ export function useMetricColorsEditor() {
           }
           if (!hasQueuedRef.current) break;
           hasQueuedRef.current = false;
-          current = queuedColorsRef.current;
+          current = queuedDraftsRef.current;
         }
       } finally {
         inFlightRef.current = false;
@@ -281,16 +333,11 @@ export function useMetricColorsEditor() {
     [config, finishEditing, queryClient],
   );
 
-  // 用 ref 持有最新 persist，让卸载 effect 保持空依赖——只在真正卸载时跑，
-  // 不会因 config 刷新（persist 重建）而把进行中的草稿提前补存。
   const persistRef = useRef(persist);
   useEffect(() => {
     persistRef.current = persist;
   }, [persist]);
 
-  // 挂载标记 + 卸载收尾。卸载时先置 mounted=false（让进行中/补存的 persist 回来后不再 setState），
-  // 再清防抖计时器，并把未落库的草稿补存一次——在防抖窗口内关闭面板不丢改动。
-  // (用 effect body 重置 mounted=true 以兼容 StrictMode 的卸载/重挂。)
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -299,29 +346,25 @@ export function useMetricColorsEditor() {
         clearTimeout(saveTimer.current);
         saveTimer.current = null;
       }
-      if (pendingColorsRef.current != null) {
-        // 有待补存:其 persist 的收尾会据 mountedRef(此刻已 false)释放编辑标记。
-        void persistRef.current(pendingColorsRef.current);
-        pendingColorsRef.current = null;
+      if (pendingDraftsRef.current != null) {
+        void persistRef.current(pendingDraftsRef.current);
+        pendingDraftsRef.current = null;
       } else if (inFlightRef.current) {
-        // 有在飞保存:由该 persist 的收尾释放,这里不动,避免在飞窗口里预览闪回旧色。
       } else {
-        // 无待补存/在飞保存时关闭，直接回到已保存配色；覆盖失败后的本地预览色。
         finishEditing(true);
       }
     };
   }, [finishEditing]);
 
   const scheduleSave = useCallback(
-    (colors: MetricColors) => {
+    (d: ThemeMetricColors) => {
       if (!config) return;
       if (saveTimer.current != null) clearTimeout(saveTimer.current);
-      pendingColorsRef.current = colors;
-      // 防抖：拖动停手后再写后端，避免每次 onChange 都发请求。
+      pendingDraftsRef.current = d;
       saveTimer.current = window.setTimeout(() => {
         saveTimer.current = null;
-        pendingColorsRef.current = null;
-        void persist(colors);
+        pendingDraftsRef.current = null;
+        void persist(d);
       }, 500);
     },
     [config, persist],
@@ -329,34 +372,42 @@ export function useMetricColorsEditor() {
 
   const commit = useCallback(
     (next: MetricColors) => {
-      // 一旦本地改色就进入编辑会话:在保存成功回环前,本地草稿/预览压过任何服务端刷新。
       metricColorEditing = true;
-      draftRef.current = next;
-      setDraft(next);
-      applyMetricColors(next); // 即时预览
-      scheduleSave(next); // 防抖落库
+      const newDrafts: ThemeMetricColors = { ...draftsRef.current, [editingTheme]: next };
+      draftsRef.current = newDrafts;
+      setDrafts(newDrafts);
+      clearMetricColorVars();
+      applyMetricColors(next);
+      scheduleSave(newDrafts);
     },
-    [scheduleSave],
+    [editingTheme, scheduleSave],
   );
 
   const setColor = useCallback(
     (key: MetricColorKey, hex: string) => {
       const v = hex.toLowerCase();
-      if (HEX.test(v)) commit({ ...draftRef.current, [key]: v });
+      if (HEX.test(v)) commit({ ...draftsRef.current[editingTheme], [key]: v });
     },
-    [commit],
+    [commit, editingTheme],
   );
 
   const resetColor = useCallback(
     (key: MetricColorKey) => {
-      const next = { ...draftRef.current };
+      const next = { ...draftsRef.current[editingTheme] };
       delete next[key];
       commit(next);
     },
-    [commit],
+    [commit, editingTheme],
   );
 
   const resetAll = useCallback(() => commit({}), [commit]);
 
-  return { colors: draft, setColor, resetColor, resetAll, saveError };
+  return {
+    colors: drafts[editingTheme],
+    editingTheme,
+    setColor,
+    resetColor,
+    resetAll,
+    saveError,
+  };
 }

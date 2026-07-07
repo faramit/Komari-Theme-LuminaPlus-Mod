@@ -22,8 +22,7 @@ export function QualityBars({ buckets, redrawKey, onHoverIndex }: QualityBarsPro
         return {
           active: hasBucketValue,
           index: bucket.index,
-          // 在这里(按桶、数据变化时)归一化成 canvas 安全色,而不是每次重绘对每根柱子算。
-          tone: safeCanvasColor(hasBucketValue ? lossHeatColor(bucket.loss) : "var(--progress-bg)"),
+          loss: bucket.loss,
         };
       }),
     [buckets],
@@ -44,8 +43,9 @@ export function QualityBars({ buckets, redrawKey, onHoverIndex }: QualityBarsPro
       const barHeight = height * ACTIVE_BAR_HEIGHT;
       const y = height - barHeight;
 
-      bars.forEach(({ active, tone }, index) => {
+      bars.forEach(({ active, loss }, index) => {
         const x = index * (barWidth + gap);
+        const tone = safeCanvasColor(active ? lossHeatColor(loss) : "var(--progress-bg)");
         ctx.globalAlpha = active ? 0.94 : 0.42;
         ctx.fillStyle = active ? tone : inactiveColor;
         fillRoundedRect(ctx, x, y, barWidth, barHeight, 2);

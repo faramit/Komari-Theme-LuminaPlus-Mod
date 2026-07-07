@@ -27,15 +27,15 @@
   --hover-bg: #edf5f3;
 
   --progress-bg: rgba(0, 79, 115, 0.08);
-  --progress-cpu: #3b82f6;
-  --progress-memory: #8b5cf6;
-  --progress-swap: #6366f1;
-  --progress-disk: #e97b35;
-  --progress-network: #10b981;
-  --progress-load: #ec4899;
+  --progress-cpu: var(--text-primary);
+  --progress-memory: var(--text-primary);
+  --progress-swap: var(--text-primary);
+  --progress-disk: var(--text-primary);
+  --progress-network: var(--text-primary);
+  --progress-load: var(--text-primary);
   /* compact 卡流量条的 heat 曲线 —— 在 --quota-high（充足）与 --quota-low（耗尽）之间
-      做 OKLCH 插值，与大卡 trafficQuotaSegmentColor() 的 color-mix(in oklch, ...)
-      行为一致。用户自定义起止色后 compact 条自动跟随渐变。 */
+       做 OKLCH 插值，与大卡 trafficQuotaSegmentColor() 的 color-mix(in oklch, ...)
+       行为一致。用户自定义起止色后 compact 条自动跟随渐变。 */
   --traffic-heat-spectrum: linear-gradient(
     to right in oklch,
     var(--quota-high, oklch(0.72 0.16 150)) 0%,
@@ -49,36 +49,36 @@
   /* 品牌强调色,Spinner 转动弧、ThemeManage 复选框等引用。 */
   --accent-500: #3b82f6;
   /* 速率热力四档(现实可见区间):B/s 超低速绿 → KB/s 低速琥珀 → MB/s 高速橙 → GB/s 及以上 急速红。 */
-  --speed-idle: #3aa76a;
-  --speed-low: #d9992b;
-  --speed-high: #e07a35;
-  --speed-max: #d6463d;
-  --speed-up-idle: #3aa76a;
-  --speed-up-low: #d9992b;
-  --speed-up-high: #e07a35;
-  --speed-up-max: #d6463d;
-  --speed-down-idle: #3aa76a;
-  --speed-down-low: #d9992b;
-  --speed-down-high: #e07a35;
-  --speed-down-max: #d6463d;
+  --speed-idle: var(--text-primary);
+  --speed-low: var(--text-primary);
+  --speed-high: var(--text-primary);
+  --speed-max: var(--text-primary);
+  --speed-up-idle: var(--text-primary);
+  --speed-up-low: var(--text-primary);
+  --speed-up-high: var(--text-primary);
+  --speed-up-max: var(--text-primary);
+  --speed-down-idle: var(--text-primary);
+  --speed-down-low: var(--text-primary);
+  --speed-down-high: var(--text-primary);
+  --speed-down-max: var(--text-primary);
   /* 流量上/下行方向色（图标、出站/入站箭头） */
-  --traffic-up: #3b82f6;
-  --traffic-down: #2f9e65;
+  --traffic-up: var(--text-primary);
+  --traffic-down: var(--text-primary);
   /* 延迟热力 5 档 */
-  --latency-0: #2bd257;
-  --latency-1: #5bde29;
-  --latency-2: #d6e626;
-  --latency-3: #eca820;
-  --latency-4: #e25112;
+  --latency-0: var(--text-primary);
+  --latency-1: var(--text-primary);
+  --latency-2: var(--text-primary);
+  --latency-3: var(--text-primary);
+  --latency-4: var(--text-primary);
   /* 丢包热力 5 档 */
-  --loss-0: #2bd257;
-  --loss-1: #5bde29;
-  --loss-2: #d6e626;
-  --loss-3: #eca820;
-  --loss-4: #e25112;
+  --loss-0: var(--text-primary);
+  --loss-1: var(--text-primary);
+  --loss-2: var(--text-primary);
+  --loss-3: var(--text-primary);
+  --loss-4: var(--text-primary);
   /* 流量配额条起点（充足）与终点（耗尽） */
-  --quota-high: #2f9e65;
-  --quota-low: #dc2626;
+  --quota-high: var(--text-primary);
+  --quota-low: var(--text-primary);
   --status-online: #2f9e65;
   --status-offline: #dc2626;
 
@@ -118,14 +118,14 @@
   --hover-bg: #062625;
 
   --progress-bg: rgba(255, 230, 203, 0.08);
-  --progress-cpu: #5d88ff;
-  --progress-memory: #a35cf5;
-  --progress-swap: #818cf8;
-  --progress-disk: #f1873d;
-  --progress-network: #5bbb8a;
-  --progress-load: #f472b6;
+  --progress-cpu: var(--text-primary);
+  --progress-memory: var(--text-primary);
+  --progress-swap: var(--text-primary);
+  --progress-disk: var(--text-primary);
+  --progress-network: var(--text-primary);
+  --progress-load: var(--text-primary);
   /* 与 light 模式相同的 OKLCH heat 曲线(在 dark 轨道上也清晰)。
-      与 trafficQuotaSegmentColor() 一致,详见上方说明。 */
+       与 trafficQuotaSegmentColor() 一致,详见上方说明。 */
   --traffic-heat-spectrum: linear-gradient(
     to right in oklch,
     var(--quota-high, oklch(0.72 0.16 150)) 0%,
@@ -137,36 +137,36 @@
   --status-error: #d84e45;
   --status-info: #5d88ff;
   --accent-500: #5d88ff;
-  --speed-idle: #61c08f;
-  --speed-low: #e0b34f;
-  --speed-high: #ef8f55;
-  --speed-max: #ec6a5e;
-  --speed-up-idle: #61c08f;
-  --speed-up-low: #e0b34f;
-  --speed-up-high: #ef8f55;
-  --speed-up-max: #ec6a5e;
-  --speed-down-idle: #61c08f;
-  --speed-down-low: #e0b34f;
-  --speed-down-high: #ef8f55;
-  --speed-down-max: #ec6a5e;
+  --speed-idle: var(--text-primary);
+  --speed-low: var(--text-primary);
+  --speed-high: var(--text-primary);
+  --speed-max: var(--text-primary);
+  --speed-up-idle: var(--text-primary);
+  --speed-up-low: var(--text-primary);
+  --speed-up-high: var(--text-primary);
+  --speed-up-max: var(--text-primary);
+  --speed-down-idle: var(--text-primary);
+  --speed-down-low: var(--text-primary);
+  --speed-down-high: var(--text-primary);
+  --speed-down-max: var(--text-primary);
   /* 流量上/下行方向色（图标、出站/入站箭头） */
-  --traffic-up: #5d88ff;
-  --traffic-down: #61c08f;
+  --traffic-up: var(--text-primary);
+  --traffic-down: var(--text-primary);
   /* 延迟热力 5 档（dark 下亮度略高） */
-  --latency-0: #41d869;
-  --latency-1: #6de141;
-  --latency-2: #dae93f;
-  --latency-3: #eeb23a;
-  --latency-4: #ed6226;
+  --latency-0: var(--text-primary);
+  --latency-1: var(--text-primary);
+  --latency-2: var(--text-primary);
+  --latency-3: var(--text-primary);
+  --latency-4: var(--text-primary);
   /* 丢包热力 5 档 */
-  --loss-0: #41d869;
-  --loss-1: #6de141;
-  --loss-2: #dae93f;
-  --loss-3: #eeb23a;
-  --loss-4: #ed6226;
+  --loss-0: var(--text-primary);
+  --loss-1: var(--text-primary);
+  --loss-2: var(--text-primary);
+  --loss-3: var(--text-primary);
+  --loss-4: var(--text-primary);
   /* 流量配额条起点与终点 */
-  --quota-high: #61c08f;
-  --quota-low: #d84e45;
+  --quota-high: var(--text-primary);
+  --quota-low: var(--text-primary);
   --status-online: #61c08f;
   --status-offline: #d84e45;
 

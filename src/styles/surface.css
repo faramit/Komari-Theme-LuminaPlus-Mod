@@ -324,6 +324,21 @@ background-size: auto, 288px 288px, cover, cover;
   color: var(--text-secondary);
 }
 
+.metric-color-picker-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.metric-color-theme-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+
 .metric-color-error {
   font-size: 11px;
   color: var(--status-offline);

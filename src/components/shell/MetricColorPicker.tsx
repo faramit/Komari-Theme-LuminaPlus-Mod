@@ -10,6 +10,8 @@ import {
   ArrowDown,
   RotateCcw,
   Signal,
+  Sun,
+  Moon,
   Unplug,
 } from "lucide-react";
 import { usePreferences } from "@/hooks/usePreferences";
@@ -56,7 +58,7 @@ const ICONS: Record<MetricColorKey, typeof Cpu> = {
 };
 
 export function MetricColorPicker() {
-  const { colors, setColor, resetColor, resetAll, saveError } = useMetricColorsEditor();
+  const { colors, editingTheme, setColor, resetColor, resetAll, saveError } = useMetricColorsEditor();
   const { resolvedAppearance } = usePreferences();
 
   // 默认色（无覆盖时生效的 token）。只在明暗模式切换/重置时重读 ——
@@ -75,7 +77,13 @@ export function MetricColorPicker() {
   return (
     <div className="metric-color-picker" role="group" aria-label="卡片配色">
       <div className="metric-color-picker-head">
-        <span>配色自定义</span>
+        <div className="metric-color-picker-title-row">
+          <span>配色自定义</span>
+          <span className="metric-color-theme-label">
+            {editingTheme === "light" ? <Sun size={13} /> : <Moon size={13} />}
+            {editingTheme === "light" ? "浅色主题" : "深色主题"}
+          </span>
+        </div>
         <button
           type="button"
           className="metric-color-reset-all"
