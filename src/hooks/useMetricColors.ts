@@ -169,6 +169,7 @@ function clearMetricColorVars() {
   for (const { cssVar } of METRIC_COLOR_META) root.style.removeProperty(cssVar);
   clearCssColorCache();
   bumpVersionThrottled();
+  appliedSig = "__init__";
 }
 
 /** 把一组配色应用到 <html>（CSS 变量即时覆盖；canvas 经 version 重绘）。相同配色不重复应用。 */
