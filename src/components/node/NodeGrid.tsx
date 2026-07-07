@@ -136,54 +136,69 @@ function HomeOverviewCards({
   return (
     <section className="home-overview" aria-label="首页总览">
       <article className="overview-card">
-        <span className="overview-card-label">在线节点</span>
+        <div className="overview-card-head">
+          <span className="overview-card-label">在线节点</span>
+          {overview.totalNodes >= 5 && overview.totalNodes <= 10 ? (
+            <div className="overview-card-head-bar" role="presentation">
+              <div className="overview-blocks">
+                {Array.from({ length: overview.totalNodes }, (_, i) => {
+                  const cls =
+                    i < overview.onlineNodes
+                      ? "overview-block is-online"
+                      : i >= overview.totalNodes - overview.offlineNodes
+                        ? "overview-block is-offline"
+                        : "overview-block";
+                  return <span key={i} className={cls} />;
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="overview-card-head-bar" role="presentation">
+              <div className="overview-bar">
+                <span className="overview-bar-online" style={{ width: `${onlinePct}%` }} />
+                <span className="overview-bar-offline" style={{ width: `${offlinePct}%` }} />
+              </div>
+            </div>
+          )}
+        </div>
         <div className="overview-card-main">
           <p className="overview-card-value">
             {overview.onlineNodes}
             <span className="overview-card-unit">/ {overview.totalNodes}</span>
           </p>
         </div>
-        {overview.totalNodes >= 5 && overview.totalNodes <= 10 ? (
-          // 节点数 5–10 时改用块状:每台一格,在线格在左、离线格在右、未知格居中,
-          // 与条状的「左绿右红」完全同步。颜色复用同一组 token,避免该红却绿。
-          <div className="overview-blocks" role="presentation">
-            {Array.from({ length: overview.totalNodes }, (_, i) => {
-              const cls =
-                i < overview.onlineNodes
-                  ? "overview-block is-online"
-                  : i >= overview.totalNodes - overview.offlineNodes
-                    ? "overview-block is-offline"
-                    : "overview-block";
-              return <span key={i} className={cls} />;
-            })}
-          </div>
-        ) : (
-          <div className="overview-bar" role="presentation">
-            <span className="overview-bar-online" style={{ width: `${onlinePct}%` }} />
-            <span className="overview-bar-offline" style={{ width: `${offlinePct}%` }} />
-          </div>
-        )}
       </article>
 
       <article className="overview-card">
-        <span className="overview-card-label">累计流量</span>
+        <div className="overview-card-head">
+          <span className="overview-card-label">累计流量</span>
+          <div className="overview-card-head-meta">
+            <p className="overview-card-sub" title={trafficDetailLabel}>
+              <span className="overview-card-sub-full">{trafficDetailLabel}</span>
+              <span className="overview-card-sub-compact">{trafficCompactLabel}</span>
+            </p>
+            {renderRating(trafficRating)}
+          </div>
+        </div>
         <div className="overview-card-main">
           <p className="overview-card-value">
             {trafficValue}
             <span className="overview-card-unit">{trafficUnit}</span>
           </p>
         </div>
-        <div className="overview-card-footer">
-          <p className="overview-card-sub" title={trafficDetailLabel}>
-            <span className="overview-card-sub-full">{trafficDetailLabel}</span>
-            <span className="overview-card-sub-compact">{trafficCompactLabel}</span>
-          </p>
-          {renderRating(trafficRating)}
-        </div>
       </article>
 
       <article className="overview-card">
-        <span className="overview-card-label">实时带宽</span>
+        <div className="overview-card-head">
+          <span className="overview-card-label">实时带宽</span>
+          <div className="overview-card-head-meta">
+            <p className="overview-card-sub">
+              {rate.value}
+              <span className="overview-card-unit">{rate.unit}</span>
+            </p>
+            {renderRating(bandwidthRating)}
+          </div>
+        </div>
         <div className="overview-card-main">
           <p className="overview-card-value" style={{ fontSize: 18 }}>
             <span style={{ color: speedRateColor(formatByteRate(overview.netUp).unit, "up") }}>
@@ -194,18 +209,18 @@ function HomeOverviewCards({
             </span>
           </p>
         </div>
-        <div className="overview-card-footer">
-          <p className="overview-card-sub">
-            {rate.value}
-            <span className="overview-card-unit">{rate.unit}</span>
-          </p>
-          {renderRating(bandwidthRating)}
-        </div>
       </article>
 
       <article className="overview-card">
         <div className="overview-card-head">
           <span className="overview-card-label">资产概览</span>
+          <div className="overview-card-head-meta">
+            <p className="overview-card-caption">实时汇率计算</p>
+            {renderRating(assetRating)}
+          </div>
+        </div>
+        <div className="overview-card-main">
+          <p className="overview-card-value">{remainingValue}</p>
           {showDetailButton && (
             <button
               type="button"
@@ -217,13 +232,6 @@ function HomeOverviewCards({
               <CircleDollarSign size={15} />
             </button>
           )}
-        </div>
-        <div className="overview-card-main">
-          <p className="overview-card-value">{remainingValue}</p>
-        </div>
-        <div className="overview-card-footer">
-          <p className="overview-card-caption">实时汇率计算</p>
-          {renderRating(assetRating)}
         </div>
       </article>
     </section>
@@ -512,7 +520,7 @@ export function NodeGrid() {
         // 复用卡片网格的列定义:分组标签落第一列(=一张卡宽,随响应式动态变化、左缘对齐首卡,
         // 沿用旧行为);排序控件钉最后一列右对齐。窄屏只剩 1 列时排序自动落到下一行右对齐。
         <div
-          className={`${gridClassName} home-controls-bar mb-4`}
+          className={`${gridClassName} home-controls-bar mb-2`}
           style={{ gridTemplateColumns: gridColumns }}
         >
           {showGroupTabs && (

@@ -62,7 +62,7 @@ export function MiniBars({ buckets, max, redrawKey, onHoverIndex }: MiniBarsProp
   return (
     <CanvasStrip
       className="mini-bar-row"
-      height={16}
+      height={12}
       ariaHidden
       redrawKey={redrawKey}
       getHoverIndex={getHoverIndex}

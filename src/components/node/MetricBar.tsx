@@ -62,24 +62,22 @@ export function MetricBar({
 
   return (
     <div className="metric-item">
-      <div className="flex justify-between items-center gap-3 min-w-0">
-        <div className="flex items-center gap-1.5 text-[var(--text-secondary)] flex-shrink-0">
-          <span>{icon}</span>
-          <span className="text-[11px] font-medium tracking-[0.02em]">{label}</span>
+      <div className="flex justify-between items-center gap-2 min-w-0">
+        <div className="flex items-center gap-1 min-w-0 truncate">
+          <span className="flex-shrink-0">{icon}</span>
+          <span className="flex-shrink-0 text-[11px] font-medium tracking-[0.02em] text-[var(--text-secondary)]">{label}</span>
+          {detailText && (
+            <span className="text-[9px] text-[var(--text-tertiary)] truncate min-w-0" title={detailText}>
+              {detailText}
+            </span>
+          )}
         </div>
-        <div className="tabular text-[13px] text-[var(--text-primary)] whitespace-nowrap overflow-hidden text-ellipsis max-w-full text-right">
+        <div className="flex-shrink-0 tabular text-[13px] text-[var(--text-primary)] whitespace-nowrap">
           <span className="font-semibold">{valueText}</span>
           {unit && (
             <span className="ml-[1px] text-[11px] text-[var(--text-tertiary)]">{unit}</span>
           )}
         </div>
-      </div>
-      <div
-        className="metric-detail"
-        title={detailText}
-        data-empty={detailText ? "false" : "true"}
-      >
-        {detailText ?? "\u00A0"}
       </div>
       <div className="metric-track">
         <CanvasStrip

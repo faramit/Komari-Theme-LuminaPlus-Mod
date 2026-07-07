@@ -10,7 +10,7 @@ import type { HomeSortControlState } from "@/hooks/useHomeSort";
 
 // 一个随方向变化的「排序」图标:升序=由小到大、降序=由大到小。一个图标同时表达排序与方向,
 // 不再额外堆箭头。
-function SortIcon({ direction, size = 14 }: { direction: HomeSortDirection; size?: number }) {
+function SortIcon({ direction, size = 9 }: { direction: HomeSortDirection; size?: number }) {
   return direction === "asc" ? (
     <ArrowUpNarrowWide size={size} aria-hidden />
   ) : (
@@ -76,7 +76,7 @@ export function HomeSortControl({ state }: { state: HomeSortControlState }) {
                 onClick={() => select(option)}
               >
                 <span className="home-sort-item-label">{HOME_SORT_FIELD_LABELS[option]}</span>
-                {active && <SortIcon direction={direction} size={15} />}
+                {active && <SortIcon direction={direction} size={10} />}
               </button>
             );
           })}

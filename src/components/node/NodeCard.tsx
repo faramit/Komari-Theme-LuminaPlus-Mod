@@ -133,23 +133,6 @@ export const NodeCard = memo(function NodeCard({
 
           <NodeTrafficQuota traffic={traffic} />
 
-          {showConnections && (
-            <div className="card-metric-section card-metric-divided server-card-meta-grid">
-              <FooterStat
-                icon={<Network size={13} strokeWidth={2} />}
-                label="TCP 连接"
-                value={node.connectionsTcp.toLocaleString()}
-                color="var(--progress-network)"
-              />
-              <FooterStat
-                icon={<Network size={13} strokeWidth={2} />}
-                label="UDP 连接"
-                value={node.connectionsUdp.toLocaleString()}
-                color="var(--progress-network)"
-              />
-            </div>
-          )}
-
           <NodeHealthSection
             ping={ping}
             pingBuckets={pingBuckets}
@@ -174,6 +157,9 @@ export const NodeCard = memo(function NodeCard({
           uptime={uptime}
           footerTags={footerTags}
           renewalPrice={renewalPrice}
+          showConnections={showConnections}
+          connectionsTcp={node.connectionsTcp}
+          connectionsUdp={node.connectionsUdp}
         />
       </div>
     </article>
@@ -193,18 +179,16 @@ function NodeCardHeader({
   return (
     <header className="server-card-header">
       <div className="server-card-title-block">
-        <div className="server-card-title-row">
-          <Flag region={node.region} size={15} />
-          <Link
-            to={`/instance/${node.uuid}`}
-            className="server-card-title-link"
-            title={node.name}
-          >
-            {node.name}
-          </Link>
-        </div>
+        <Flag region={node.region} size={15} />
+        <Link
+          to={`/instance/${node.uuid}`}
+          className="server-card-title-link"
+          title={node.name}
+        >
+          {node.name}
+        </Link>
         {(subtitle || node.ipv4 || node.ipv6) && (
-          <div className="server-card-subtitle-row">
+          <div className="flex items-center gap-0.5 flex-shrink-0 min-w-0 overflow-hidden">
             {subtitle && (
               <span className="server-card-subtitle" title={subtitle}>
                 {subtitle}
@@ -252,7 +236,7 @@ function NodeMetricSection({
         label="内存"
         valueText={node.ramPct.toFixed(2)}
         unit="%"
-        detailText={`${formatBytes(node.ramUsed)} / ${formatBytes(node.ramTotal)}`}
+        detailText={`${formatBytes(node.ramUsed).replace(" ", "")}/${formatBytes(node.ramTotal).replace(" ", "")}`}
         fraction={node.ramPct / 100}
         redrawKey={redrawKey}
         paint="var(--progress-memory)"
@@ -262,7 +246,7 @@ function NodeMetricSection({
         label="磁盘"
         valueText={node.diskPct.toFixed(1)}
         unit="%"
-        detailText={`${formatBytes(node.diskUsed)} / ${formatBytes(node.diskTotal)}`}
+        detailText={`${formatBytes(node.diskUsed).replace(" ", "")}/${formatBytes(node.diskTotal).replace(" ", "")}`}
         fraction={node.diskPct / 100}
         redrawKey={redrawKey}
         paint="var(--progress-disk)"
@@ -306,7 +290,7 @@ function NodeTrafficSection({
         active={node.netUp > 0}
         redrawKey={redrawKey}
         color="var(--traffic-up)"
-        icon={<ArrowUp size={15} strokeWidth={2.4} />}
+        icon={<ArrowUp size={13} strokeWidth={2.2} />}
       />
       <TrafficStat
         direction="下行"
@@ -318,7 +302,7 @@ function NodeTrafficSection({
         active={node.netDown > 0}
         redrawKey={redrawKey}
         color="var(--traffic-down)"
-        icon={<ArrowDown size={15} strokeWidth={2.4} />}
+        icon={<ArrowDown size={13} strokeWidth={2.2} />}
       />
     </div>
   );
@@ -338,7 +322,7 @@ function NodeTrafficQuota({ traffic }: { traffic: TrafficDisplay }) {
     >
       <div className="traffic-quota-head">
         <span className="traffic-quota-label">
-          <Database size={13} strokeWidth={2} />
+          <Database size={12} strokeWidth={2} />
           <span>剩余流量</span>
           <strong className="traffic-quota-remain">{traffic.remainingLabel}</strong>
         </span>
@@ -402,7 +386,7 @@ const NodeHealthSection = memo(function NodeHealthSection({
       <div className="server-health-block">
         <div className="server-health-head">
           <div className="server-health-label">
-            <Clock3 size={13} strokeWidth={2} />
+            <Clock3 size={11} strokeWidth={2} />
             <span>延迟</span>
           </div>
           <span className="server-health-value tabular" style={{ color: latencyColor }}>
@@ -444,7 +428,7 @@ const NodeHealthSection = memo(function NodeHealthSection({
       <div className="server-health-block">
         <div className="server-health-head">
           <div className="server-health-label">
-            <Unplug size={13} strokeWidth={2} />
+            <Unplug size={11} strokeWidth={2} />
             <span>丢包率</span>
           </div>
           <span className="server-health-value tabular" style={{ color: lossColor }}>
@@ -503,7 +487,7 @@ function FooterPriceChip({ renewalPrice, titled }: { renewalPrice: string; title
       className="dstatus-price-chip"
       title={titled ? `续费价格 ${renewalPrice}` : undefined}
     >
-      <CircleDollarSign size={12} strokeWidth={2.2} />
+      <CircleDollarSign size={10} strokeWidth={2.2} />
       {renewalPrice}
     </span>
   );
@@ -515,12 +499,18 @@ function NodeCardFooter({
   uptime,
   footerTags,
   renewalPrice,
+  showConnections,
+  connectionsTcp,
+  connectionsUdp,
 }: {
   expire: DisplayStat;
   expireColor: string;
   uptime: DisplayStat;
   footerTags: DisplayTag[];
   renewalPrice: string | null;
+  showConnections: boolean;
+  connectionsTcp: number;
+  connectionsUdp: number;
 }) {
   const rowRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
@@ -588,16 +578,35 @@ function NodeCardFooter({
 
   return (
     <div className="server-card-footer">
-      <div className="server-card-meta-grid">
+      <div
+        className="server-card-meta-grid"
+        style={{ "--meta-cols": showConnections ? 4 : 2 } as React.CSSProperties}
+      >
+        {showConnections && (
+          <>
+            <FooterStat
+              icon={<Network size={11} strokeWidth={2} />}
+              label="TCP"
+              value={connectionsTcp.toLocaleString()}
+              color="var(--progress-network)"
+            />
+            <FooterStat
+              icon={<Network size={11} strokeWidth={2} />}
+              label="UDP"
+              value={connectionsUdp.toLocaleString()}
+              color="var(--progress-network)"
+            />
+          </>
+        )}
         <FooterStat
-          icon={<RefreshCw size={13} strokeWidth={2} />}
+          icon={<RefreshCw size={11} strokeWidth={2} />}
           label="在线"
           value={uptime.value}
           unit={uptime.unit}
           color="var(--progress-cpu)"
         />
         <FooterStat
-          icon={<Calendar size={13} strokeWidth={2} />}
+          icon={<Calendar size={11} strokeWidth={2} />}
           label="到期"
           value={expire.value}
           unit={expire.unit}
@@ -756,23 +765,23 @@ function GlobeArrow({
     <span
       className="relative inline-flex items-center justify-center"
       style={{
-        width: 18,
-        height: 18,
+        width: 16,
+        height: 16,
         color,
       }}
       aria-hidden
     >
-      <Globe size={15} strokeWidth={1.9} />
+      <Globe size={13} strokeWidth={1.8} />
       {isInbound ? (
         <ArrowDown
-          size={9}
-          strokeWidth={2.4}
+          size={8}
+          strokeWidth={2.2}
           className="absolute -right-[2px] bottom-[-1px]"
         />
       ) : (
         <ArrowUp
-          size={9}
-          strokeWidth={2.4}
+          size={8}
+          strokeWidth={2.2}
           className="absolute -right-[2px] bottom-[-1px]"
         />
       )}
