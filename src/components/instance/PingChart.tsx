@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import UplotReact from "uplot-react";
 import type uPlot from "uplot";
 import { Eye, EyeOff, RefreshCw } from "lucide-react";
@@ -343,8 +343,9 @@ export function PingChart({
       const max = valid.length ? valid[valid.length - 1] : null;
       const p50 = percentileFromSorted(valid, 0.5);
       const p99 = percentileFromSorted(valid, 0.99);
-      // p50 现在可能为 0（亚毫秒任务），`p50 &&` 守卫仍需保留：避免 p99/0 得到 Infinity。
-      const volatility = p50 && p99 ? p99 / p50 : null;
+      // p50 现在可能为 0（亚毫秒任务），需要显式 null-check 避免 p99/0 得到 Infinity，
+      // 同时 p99=0 是有意义的（所有采样值取整为 0），不应被 falsy 守卫吞掉。
+      const volatility = p50 != null && p99 != null && p50 > 0 ? p99 / p50 : null;
       const total = records.length;
       const lost = records.filter((record) => record.value < 0).length;
       const loss = total > 0 ? (lost / total) * 100 : task.loss;
@@ -411,11 +412,6 @@ export function PingChart({
         </button>
         <button type="button" className="instance-toggle-button" onClick={() => {
           setRefreshKey((k) => k + 1);
-          setTimeout(() => {
-            startTransition(() => {
-              setRefreshKey((k) => k + 1);
-            });
-          }, 0);
         }}>
           <RefreshCw size={14} />
           刷新

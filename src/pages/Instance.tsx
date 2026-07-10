@@ -57,7 +57,8 @@ export function Instance() {
     if (!loadRanges.some((range) => range.value === loadHours)) {
       setLoadHours(loadRanges[0]?.value ?? 0);
     }
-  }, [loadHours, loadRanges]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadRanges]);
 
   useEffect(() => {
     if (!pingRanges.some((range) => range.value === pingHours)) {
@@ -67,7 +68,8 @@ export function Instance() {
           DEFAULT_PING_HOURS,
       );
     }
-  }, [pingHours, pingRanges]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pingRanges]);
 
   useEffect(() => {
     if (!showPingChart && chartType === "ping") {

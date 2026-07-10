@@ -139,6 +139,13 @@ const WIDE_CHART_MOBILE_HEIGHT = 360;
 // 把响应式图表宽度量化到这个步长，让拖拽改尺寸收敛到离散尺寸，而非每个像素都重建 uPlot。
 const CHART_WIDTH_STEP = 8;
 
+/** Normalise a timestamp to Unix seconds.
+ *
+ *  The heuristic `> 1e12` distinguishes Unix-seconds from Unix-milliseconds.
+ *  Current epoch ~1.7e9 (s) / ~1.7e12 (ms), so until year 33658 (s) ≡ 2001 (ms),
+ *  the result is unambiguous.  Callers that receive the result should treat it
+ *  as **seconds**.
+ */
 export function toChartSeconds(value: string | number): number {
   if (typeof value === "number") {
     return value > 1_000_000_000_000 ? value / 1000 : value;
@@ -373,7 +380,7 @@ export function useResponsiveChartSize(mode: "grid" | "wide") {
 
   useEffect(() => {
     apply();
-    window.addEventListener("resize", scheduleApply);
+    window.addEventListener("resize", scheduleApply, { passive: true });
     return () => {
       window.removeEventListener("resize", scheduleApply);
       observerRef.current?.disconnect();

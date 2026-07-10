@@ -29,8 +29,8 @@ type JsonRpcResponse<TResult = unknown> =
   | JsonRpcSuccess<TResult>
   | JsonRpcFailure;
 
-type PendingRequest = {
-  resolve: (value: any) => void;
+type PendingRequest<TResult = unknown> = {
+  resolve: (value: TResult) => void;
   reject: (reason?: unknown) => void;
   timeout: number;
 };
@@ -98,9 +98,10 @@ class RPC2Client {
 
   private autoConnect() {
     if (this.closed) return;
-    void this.connect().catch(() => {
-      // socket 不可用时仍可走 HTTP 兜底。
+    void this.connect().catch((e) => {
+      console.error('RPC2 client connect error:', e);
     });
+    // socket 不可用时仍可走 HTTP 兜底。
   }
 
   // 清掉所有 timer、socket 和 pending 请求。HMR dispose 时用,避免旧 client 的

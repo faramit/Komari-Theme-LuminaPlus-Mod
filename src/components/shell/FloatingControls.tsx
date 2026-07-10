@@ -5,6 +5,7 @@ import { MetricColorPicker } from "./MetricColorPicker";
 import { usePreferences } from "@/hooks/usePreferences";
 import { useViewMode } from "@/hooks/useViewMode";
 import { useNodeStoreStatus } from "@/hooks/useNode";
+import { FAILURE_STREAK_WARN_THRESHOLD } from "@/services/wsStore";
 import { useAuth } from "@/hooks/useAuth";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { clsx } from "clsx";
@@ -38,7 +39,7 @@ function FloatingControlsInner() {
   const loggedIn = Boolean(me?.logged_in);
   const showThemeManage = loggedIn;
   const showColorPicker = loggedIn;
-  const showSyncWarning = failureStreak >= 2;
+  const showSyncWarning = failureStreak >= FAILURE_STREAK_WARN_THRESHOLD;
   const hiddenTabIndex = collapsed ? -1 : undefined;
   const ToggleIcon = collapsed ? ChevronLeft : ChevronRight;
   const ViewIcon = mode === "compact" ? LayoutGrid : Rows3;

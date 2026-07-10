@@ -36,6 +36,7 @@ interface PingOverviewMapResult {
 
 type Listener = () => void;
 
+/** Convert a timestamp to Unix **milliseconds**. 同 wsStore.toTimestamp 逻辑。 */
 function toTimestamp(value: string | number) {
   if (typeof value === "number") {
     return value > 1_000_000_000_000 ? value : value * 1000;

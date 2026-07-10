@@ -561,7 +561,7 @@ function NodeCardFooter({
     if (observer) {
       observer.observe(row);
     } else {
-      window.addEventListener("resize", updateVisibleTags);
+      window.addEventListener("resize", updateVisibleTags, { passive: true });
     }
     // 字体替换会在首次绘制后改变 tag 宽度;字体就绪后重新测量一次,
     // 但若卡片在 promise resolve 前已卸载则跳过。

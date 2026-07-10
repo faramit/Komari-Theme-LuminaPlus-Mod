@@ -26,7 +26,7 @@ import type { NodeMetrics } from "@/types/komari";
 
 const LOAD_HISTORY_SAMPLE_LIMIT = 360;
 const LOAD_HISTORY_RENDER_LIMIT = 720;
-const REALTIME_HISTORY_SEED_LIMIT = 120;
+
 const REALTIME_SAMPLE_LIMIT = 600;
 
 const CPU_KEYS = ["cpu"];
@@ -110,7 +110,7 @@ function getSeriesLabel(key: string) {
 
 function pointFromNode(node: NodeMetrics): ChartPoint {
   return {
-    time: Date.now() / 1000,
+    time: Math.floor(Date.now() / 1000),
     cpu: node.cpuPct,
     ram: node.ramTotal > 0 ? (node.ramUsed / node.ramTotal) * 100 : 0,
     swap: node.swapTotal > 0 ? (node.swapUsed / node.swapTotal) * 100 : 0,
@@ -264,6 +264,7 @@ const ChartCard = memo(function ChartCard({
   axisSize?: number;
 }) {
   const dataRef = useRef<uPlot.AlignedData>([[]]);
+  const prevRangeHours = useRef(rangeHours);
   const [tooltip, setTooltip] = useState<ChartTooltipState>({
     show: false,
     left: 0,
@@ -325,6 +326,10 @@ const ChartCard = memo(function ChartCard({
     [enhancedOptions, width, height],
   );
 
+  useEffect(() => {
+    prevRangeHours.current = rangeHours;
+  }, [rangeHours]);
+
   return (
     <div
       className="instance-chart-card"
@@ -342,10 +347,10 @@ const ChartCard = memo(function ChartCard({
       </header>
       <div className="instance-uplot-wrap">
         <UplotReact
-          key={`${uuid}-${rangeHours}`}
+          key={uuid}
           options={chartOptions}
           data={data}
-          resetScales={false}
+          resetScales={rangeHours === 0 || rangeHours !== prevRangeHours.current}
         />
         <ChartTooltip tooltip={tooltip} />
       </div>
@@ -411,13 +416,9 @@ export function LoadChart({
 
   const points = useMemo<ChartPoint[]>(() => {
     if (isRealtime) {
-      const initial = historyPoints.slice(-REALTIME_HISTORY_SEED_LIMIT);
-      const merged = [...initial, ...realtimePoints].sort((a, b) => a.time - b.time);
-      const deduped = merged.filter((point, index, arr) => {
-        const next = arr[index + 1];
-        return !next || Math.abs(next.time - point.time) >= 1;
-      });
-      return deduped.slice(-REALTIME_SAMPLE_LIMIT);
+      // In realtime mode we simply use the collected realtime points, sorted and limited.
+      const sorted = [...realtimePoints].sort((a, b) => a.time - b.time);
+      return sorted.slice(-REALTIME_SAMPLE_LIMIT);
     }
     return historyPoints;
   }, [historyPoints, isRealtime, realtimePoints]);

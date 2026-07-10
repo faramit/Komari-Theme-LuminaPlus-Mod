@@ -20,6 +20,30 @@ import {
 } from "@/types/komari";
 import { fetchWithTimeout } from "@/utils/abort";
 
+// Optional CSRF token injection. If the page defines a global `csrfToken` (e.g., via a meta tag or script), it will be sent as `X-CSRF-Token` header.
+function addCsrfHeader(headers: Record<string, string>) {
+  try {
+    const token = (window as any).csrfToken;
+    if (token) {
+      headers["X-CSRF-Token"] = String(token);
+    }
+  } catch {
+    // ignore if window undefined (e.g., during SSR) or token not set
+  }
+  return headers;
+}
+
+// Optional central error reporting hook. If a global `reportError` function exists, forward caught errors.
+function maybeReportError(err: unknown) {
+  try {
+    if (typeof (window as any).reportError === "function") {
+      (window as any).reportError(err);
+    }
+  } catch {
+    // ignore any failures in the reporting mechanism itself
+  }
+}
+
 const ApiEnvelope = <T extends z.ZodTypeAny>(inner: T) =>
   z.object({
     status: z.string().optional(),
@@ -113,17 +137,20 @@ async function apiGet<T>(
   schema: z.ZodType<T>,
   options?: { signal?: AbortSignal; timeout?: number },
 ): Promise<T> {
+  const headers = addCsrfHeader({ Accept: "application/json" });
   const resp = await fetchWithTimeout(
     path,
     {
       credentials: "include",
-      headers: { Accept: "application/json" },
+      headers,
     },
     options?.timeout ?? DEFAULT_API_TIMEOUT_MS,
     options?.signal,
   );
   if (!resp.ok) {
-    throw new ApiRequestError(`Request ${path} failed: ${resp.status}`, resp.status, path);
+    const err = new ApiRequestError(`Request ${path} failed: ${resp.status}`, resp.status, path);
+    maybeReportError(err);
+    throw err;
   }
   const json = (await resp.json()) as unknown;
   const envelopeResult = ApiEnvelope(schema).safeParse(json);

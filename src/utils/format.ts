@@ -124,7 +124,9 @@ export function resolveExpireTimestamp(
   if (/^-?\d+$/.test(raw)) {
     const n = Number(raw);
     if (n <= 0) return null; // 0 / -1 "无到期" 哨兵值
-    return n < 1e12 ? n * 1000 : n; // unix 秒 vs. 毫秒
+    // unix 秒 vs. 毫秒：heuristic `> 1e12` 区分两者。同 chartShared.toChartSeconds
+    // 互为逆操作——本函数转秒→毫秒（输出 ms），toChartSeconds 转毫秒→秒（输出 s）。
+    return n < 1e12 ? n * 1000 : n;
   }
   const ts = Date.parse(raw);
   if (Number.isNaN(ts) || ts <= 0) return null; // 无法解析或 Go 零时

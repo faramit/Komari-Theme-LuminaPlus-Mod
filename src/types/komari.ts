@@ -5,11 +5,11 @@ import { z } from "zod";
 const looseString = z
   .union([z.string(), z.number(), z.boolean()])
   .transform((v) => String(v))
-  .catch("");
+  .optional().default("");
 const looseNumber = z
   .union([z.number(), z.string()])
   .transform((v) => (typeof v === "number" ? v : Number.parseFloat(v) || 0))
-  .catch(0);
+  .optional().default(0);
 const looseBool = z
   .union([z.boolean(), z.number(), z.string()])
   .transform((v) => {
@@ -26,7 +26,7 @@ const looseBool = z
 
     return Boolean(normalized);
   })
-  .catch(false);
+  .optional().default(false);
 
 export const NodeInfoSchema = z
   .object({
@@ -255,7 +255,7 @@ export const LoadRecordSchema = z
     process: looseNumber,
     connections: looseNumber,
     connections_udp: looseNumber,
-    time: z.union([z.string(), z.number()]).catch(""),
+    time: z.union([z.string(), z.number()]).optional().default(""),
     client: z.string().default(""),
   })
   .passthrough();
@@ -285,7 +285,7 @@ export interface LoadRecord {
 export const PingRecordSchema = z
   .object({
     task_id: looseNumber,
-    time: z.union([z.string(), z.number()]).catch(""),
+    time: z.union([z.string(), z.number()]).optional().default(""),
     value: looseNumber,
     client: z.string().default(""),
   })

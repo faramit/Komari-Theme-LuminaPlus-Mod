@@ -132,7 +132,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       return (
         <ErrorFallback
           message={getErrorMessage(this.state.error)}
-          diagnostics={buildDiagnostics(this.state.error, readViewModeHint())}
+          diagnostics={process.env.NODE_ENV !== 'production' ? buildDiagnostics(this.state.error, readViewModeHint()) : undefined}
         />
       );
     }

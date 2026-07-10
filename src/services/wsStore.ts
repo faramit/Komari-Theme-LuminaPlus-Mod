@@ -48,6 +48,8 @@ interface NodeTrafficTrend {
 
 const LIVE_STATUS_REFRESH_INTERVAL_MS = 2_000;
 const NODE_INFO_REFRESH_INTERVAL_MS = 30_000;
+// 连续失败超过此阈值时在浮动控件中显示黄色警告点。
+export const FAILURE_STREAK_WARN_THRESHOLD = 2;
 // 实时轮询每 2s 一次;单次请求超时设得远低于 RPC 默认的 30s,这样 half-open socket 能
 // 快速失败(暴露 failureStreak 并让下一 tick 重试),而不是冻结实时更新长达一分钟。
 const LIVE_STATUS_REQUEST_TIMEOUT_MS = 8_000;
@@ -480,6 +482,13 @@ function resolveOnline(rawRecord: unknown): boolean {
   return asBoolean(record.online, Object.keys(record).length > 0);
 }
 
+/** Convert a timestamp to Unix **milliseconds**.
+ *
+ *  The heuristic `> 1e12` distinguishes Unix-seconds from Unix-milliseconds.
+ *  Current epoch ~1.7e9 (s) / ~1.7e12 (ms), so until year 33658 (s) ≡ 2001 (ms),
+ *  the result is unambiguous.  Callers that receive the result should treat it
+ *  as **milliseconds** — this is the inverse of `toChartSeconds` / `resolveExpireTimestamp`.
+ */
 function toTimestamp(value: string | number | undefined): number {
   if (typeof value === "number") {
     return value > 1_000_000_000_000 ? value : value * 1000;
@@ -774,6 +783,7 @@ async function hydrate() {
   if (hydratePromise) return hydratePromise;
 
   hydratePromise = syncNodeInfo(true).catch((error) => {
+    console.error('hydrate error:', error);
     hydratePromise = null;
     throw error;
   });
@@ -860,7 +870,9 @@ export function ensureStarted() {
   nodeInfoTimer = window.setInterval(() => {
     // syncNodeInfo 只有 finally;吞掉偶发的 /api/nodes 失败,避免失败的 30s tick 抛出
     // unhandled rejection(下一 tick 会重试)。
-    void syncNodeInfo().catch(() => {});
+    void syncNodeInfo().catch((err) => {
+    console.error('syncNodeInfo error:', err);
+  });
   }, NODE_INFO_REFRESH_INTERVAL_MS);
 }
 
@@ -964,6 +976,16 @@ export function getNodeTrafficTrendSnapshot(uuid: string): {
   return trend.snapshot;
 }
 
+/**
+ * Determine if a node should be included in visible lists.
+ * @param node The node metadata.
+ * @param includeHidden When true, hidden nodes are allowed.
+ * @returns true if the node is visible under the given flag.
+ */
+function isNodeVisible(node: NodeInfo, includeHidden: boolean): boolean {
+  return Boolean(node) && (includeHidden || !node.hidden);
+}
+
 export function getVisibleNodeUuidsSnapshot(includeHidden = false): string[] {
   if (includeHidden) {
     if (visibleNodeUuidsWithHiddenSnapshotVersion === storeVersion) {
@@ -975,7 +997,7 @@ export function getVisibleNodeUuidsSnapshot(includeHidden = false): string[] {
 
   const next = state.order.filter((uuid) => {
     const node = state.metaByUuid[uuid];
-    return Boolean(node) && (includeHidden || !node.hidden);
+    return isNodeVisible(node, includeHidden);
   });
 
   const previous = includeHidden
