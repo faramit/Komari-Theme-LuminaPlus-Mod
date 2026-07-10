@@ -26,5 +26,7 @@
 - 优化大卡片整体布局 现在大卡片更紧凑
 - 浅色背景和深色背景的自定义颜色分开保存 可以定义两套颜色
 
-![示意图1](docs/images/LuminaPlusMod1.png)
-![示意图2](docs/images/LuminaPlusMod2.png)
+<div style="display: flex; gap: 10px;">
+  <img src="docs/images/LuminaPlusMod1.png" width="50%">
+  <img src="docs/images/LuminaPlusMod2.png" width="50%">
+</div>
