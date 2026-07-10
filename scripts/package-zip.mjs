@@ -56,6 +56,7 @@ const entries = [
   { path: "komari-theme.json", full: resolve(root, "komari-theme.json") },
   { path: "preview.png", full: previewPath },
   ...walk(distDir, root),
+  ...walk(resolve(root, "docs/images"), root),
 ];
 
 const stream = createWriteStream(outPath);
