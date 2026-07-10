@@ -8,10 +8,12 @@
 
 ---
 
-<div style="display: flex; gap: 9px;">
-  <img src="docs/images/LuminaPlusMod1.png" width="50%">
-  <img src="docs/images/LuminaPlusMod2.png" width="50%">
-</div>
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/LuminaPlusMod1.png" width="100%"></td>
+    <td width="50%"><img src="docs/images/LuminaPlusMod2.png" width="100%"></td>
+  </tr>
+</table>
 
 ## 修改总结
 
