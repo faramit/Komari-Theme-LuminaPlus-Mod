@@ -195,6 +195,8 @@ function buildAssignmentKey(selectedTaskByClient: Map<string, number>) {
 // 会一直为 true，把后续所有轮询都卡死。给每个请求加 race 才能保证整条链路能恢复。
 const PING_REQUEST_TIMEOUT_MS = 35_000;
 
+const ADAPTIVE_MAX_HOURS = 12;
+
 async function buildOverviewMap(
   hours: number,
   clientUuids: string[],
@@ -223,58 +225,76 @@ async function buildOverviewMap(
     };
   }
 
-  const overviewResults = await Promise.allSettled(
-    selectedTaskIds.map(async (taskId) => {
-      const requestSignal = signalWithTimeout(signal, PING_REQUEST_TIMEOUT_MS);
-      return {
+  let adaptiveHours = Math.max(1, hours);
+  let items = new Map<string, PingOverviewItem>();
+  let intervalMs = DEFAULT_PING_REFRESH_INTERVAL;
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const overviewResults = await Promise.allSettled(
+      selectedTaskIds.map(async (taskId) => {
+        const requestSignal = signalWithTimeout(signal, PING_REQUEST_TIMEOUT_MS);
+        return {
+          taskId,
+          overview: await getPingOverview(adaptiveHours, taskId, { signal: requestSignal }),
+        };
+      }),
+    );
+
+    const itemsByTask = new Map<number, Map<string, PingOverviewItem>>();
+    const refreshIntervals: number[] = [];
+    let totalRecords = 0;
+
+    for (const result of overviewResults) {
+      if (result.status !== "fulfilled") {
+        continue;
+      }
+
+      const {
         taskId,
-        overview: await getPingOverview(hours, taskId, { signal: requestSignal }),
-      };
-    }),
-  );
+        overview: { records, tasks },
+      } = result.value;
+      itemsByTask.set(taskId, buildPingOverviewItems(taskId, records));
+      totalRecords += records.length;
 
-  const itemsByTask = new Map<number, Map<string, PingOverviewItem>>();
-  const refreshIntervals: number[] = [];
-
-  for (const result of overviewResults) {
-    if (result.status !== "fulfilled") {
-      continue;
+      const taskInterval = tasks.find((task) => task.id === taskId)?.interval;
+      refreshIntervals.push(normalizeRefreshInterval(taskInterval));
     }
 
-    const {
-      taskId,
-      overview: { records, tasks },
-    } = result.value;
-    itemsByTask.set(taskId, buildPingOverviewItems(taskId, records));
-
-    const taskInterval = tasks.find((task) => task.id === taskId)?.interval;
-    refreshIntervals.push(normalizeRefreshInterval(taskInterval));
-  }
-
-  const items = new Map<string, PingOverviewItem>();
-  for (const [uuid, taskId] of selectedTaskByClient) {
-    const item = itemsByTask.get(taskId)?.get(uuid);
-    if (item) {
-      items.set(uuid, item);
-      continue;
+    items = new Map<string, PingOverviewItem>();
+    for (const [uuid, taskId] of selectedTaskByClient) {
+      const item = itemsByTask.get(taskId)?.get(uuid);
+      if (item) {
+        items.set(uuid, item);
+        continue;
+      }
+      items.set(uuid, {
+        client: uuid,
+        isAssigned: true,
+        lastValue: null,
+        values: [],
+        samples: [],
+        max: 1,
+        loss: null,
+      });
     }
-    items.set(uuid, {
-      client: uuid,
-      isAssigned: true,
-      lastValue: null,
-      values: [],
-      samples: [],
-      max: 1,
-      loss: null,
-    });
+
+    intervalMs =
+      refreshIntervals.length > 0
+        ? Math.min(...refreshIntervals)
+        : DEFAULT_PING_REFRESH_INTERVAL;
+
+    const minRecords = selectedTaskIds.length * MAX_VISIBLE_HOMEPAGE_PING_BUCKETS;
+    if (totalRecords >= minRecords || adaptiveHours >= ADAPTIVE_MAX_HOURS) break;
+
+    adaptiveHours = Math.min(
+      ADAPTIVE_MAX_HOURS,
+      Math.ceil((adaptiveHours * minRecords) / Math.max(1, totalRecords)),
+    );
   }
 
   return {
     assignmentKey: buildAssignmentKey(selectedTaskByClient),
-    intervalMs:
-      refreshIntervals.length > 0
-        ? Math.min(...refreshIntervals)
-        : DEFAULT_PING_REFRESH_INTERVAL,
+    intervalMs,
     items,
   };
 }
@@ -540,16 +560,30 @@ export function usePingMiniBuckets(
 ): PingOverviewBucket[] {
   return useMemo(() => {
     const now = Date.now();
-    const totalWindowMs = 60 * 60 * 1000;
     const resolvedCount = count ?? MAX_VISIBLE_HOMEPAGE_PING_BUCKETS;
+    const samples = ping.samples ?? [];
+
+    // 根据实际数据跨度自适应调整窗口，确保降采样开启时格子不空。
+    // 降采样关：~240 点/小时 → dataSpan ≈ 1h → window = 1h（同之前）
+    // 降采样开（7.5min rollup）：~24 点/3 小时 → dataSpan ≈ 3h → window = 3h
+    let totalWindowMs = 3_600_000;
+    if (samples.length > 1) {
+      const minTime = Math.min(...samples.map((s) => s.time));
+      const maxTime = Math.max(...samples.map((s) => s.time));
+      const dataSpan = maxTime - minTime;
+      if (dataSpan > totalWindowMs) {
+        totalWindowMs = dataSpan;
+      }
+    }
+
     const bucketMs = totalWindowMs / resolvedCount;
-    const windowStart = now - bucketMs * resolvedCount;
+    const windowStart = now - totalWindowMs;
     const totals = new Array<number>(resolvedCount).fill(0);
     const losts = new Array<number>(resolvedCount).fill(0);
     const positiveSums = new Array<number>(resolvedCount).fill(0);
     const positiveCounts = new Array<number>(resolvedCount).fill(0);
 
-    for (const sample of ping.samples ?? []) {
+    for (const sample of samples) {
       if (sample.time < windowStart || sample.time > now) continue;
 
       let bucketIndex = Math.floor((sample.time - windowStart) / bucketMs);

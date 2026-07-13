@@ -14,6 +14,16 @@ import { useThemeSettings } from "@/hooks/useThemeSettings";
 
 const DEFAULT_PING_HOURS = 4;
 
+function resolveRetentionHours(
+  metricRetentionDays: number | null | undefined,
+  oldRecordHours: number | undefined,
+): number | undefined {
+  if (typeof metricRetentionDays === "number" && metricRetentionDays > 0) {
+    return metricRetentionDays * 24;
+  }
+  return oldRecordHours && oldRecordHours > 0 ? oldRecordHours : undefined;
+}
+
 export function Instance() {
   const { uuid } = useParams<{ uuid: string }>();
   const { data: config } = usePublicConfig();
@@ -23,13 +33,22 @@ export function Instance() {
   const [pingHours, setPingHours] = useState(DEFAULT_PING_HOURS);
   const chartControlsRef = useRef<HTMLDivElement | null>(null);
 
+  const retentionHours = useMemo(
+    () => resolveRetentionHours(config?.metric_retention_days, config?.record_preserve_time),
+    [config?.metric_retention_days, config?.record_preserve_time],
+  );
+  const pingRetentionHours = useMemo(
+    () => resolveRetentionHours(config?.metric_retention_days, config?.ping_record_preserve_time),
+    [config?.metric_retention_days, config?.ping_record_preserve_time],
+  );
+
   const loadRanges = useMemo(
-    () => buildLoadTimeRangeOptions(config?.record_preserve_time),
-    [config?.record_preserve_time],
+    () => buildLoadTimeRangeOptions(retentionHours),
+    [retentionHours],
   );
   const pingRanges = useMemo(
-    () => buildPingTimeRangeOptions(config?.ping_record_preserve_time),
-    [config?.ping_record_preserve_time],
+    () => buildPingTimeRangeOptions(pingRetentionHours),
+    [pingRetentionHours],
   );
   const showPingChart = themeSettings.isReady && themeSettings.showPingChart;
 

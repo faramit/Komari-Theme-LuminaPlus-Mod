@@ -182,6 +182,7 @@ export const PublicConfigSchema = z
     record_enabled: z.boolean().default(true),
     record_preserve_time: z.number().default(0),
     ping_record_preserve_time: z.number().default(0),
+    metric_retention_days: z.number().nullish(),
     custom_head: z.string().default(""),
     custom_body: z.string().default(""),
     theme_settings: z.record(z.string(), z.unknown()).default({}),
@@ -199,6 +200,7 @@ export interface PublicConfig {
   record_enabled: boolean;
   record_preserve_time: number;
   ping_record_preserve_time: number;
+  metric_retention_days: number | null | undefined;
   custom_head: string;
   custom_body: string;
   theme_settings: ThemeSettings & Record<string, unknown>;
