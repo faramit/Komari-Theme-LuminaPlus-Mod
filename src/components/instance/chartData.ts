@@ -138,12 +138,12 @@ export function fillMissingMetricPoints(
 
     // 内部采样吸附到网格时间，但保留最新采样自己的时间戳——否则不在网格上的末点会被前移
     // 半个 interval，导致图表右边缘和覆盖范围标签都偏移。
-
+    const isLastSample = matched === sortedPoints[sortedPoints.length - 1];
     filled.push(
-    		matched
-    			? { ...base, ...matched, time: matched.time }
-    			: { ...base, time: current },
-    		);
+      matched
+        ? { ...base, ...matched, time: isLastSample ? matched.time : current }
+        : { ...base, time: current },
+    );
 
     if (matched) {
       pointer += 1;

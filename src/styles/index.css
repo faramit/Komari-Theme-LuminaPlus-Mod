@@ -6,6 +6,7 @@
 @import "./node-card.css";
 @import "./compact-node-card.css";
 @import "./os-logo.css";
+@import "./traffic-stats.css";
 
 @theme {
   --font-sans:

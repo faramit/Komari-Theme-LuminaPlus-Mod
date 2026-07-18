@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useNodeMeta, useNodeMetrics, useNodeTrafficTrend } from "@/hooks/useNode";
-import { usePingMini, usePingMiniBuckets } from "@/hooks/usePingMini";
+import { useNodePingOverview, usePingBuckets } from "@/hooks/usePingMini";
+import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { formatRenewalPrice } from "@/utils/billing";
 import { getExpireTextColor } from "@/utils/expireStatus";
 import {
@@ -19,15 +20,18 @@ export function useNodeCardModel(uuid: string, pingBucketCount?: number) {
   const meta = useNodeMeta(uuid);
   const metrics = useNodeMetrics(uuid);
   const trafficTrend = useNodeTrafficTrend(uuid);
-  const ping = usePingMini(uuid);
-  const pingBuckets = usePingMiniBuckets(ping, pingBucketCount);
+  const ping = useNodePingOverview(uuid);
+  const pingBuckets = usePingBuckets(ping, pingBucketCount);
+
+  const { showCardGroup } = useThemeSettings();
 
   // meta 派生字段（tag 解析、到期、续费价、OS 查询）只在 meta 变化时才变（很少），
   // 不能每秒 metrics 刷新都重算，所以单独用一个只依赖 meta 的 memo。
   const metaModel = useMemo(() => {
     if (!meta) return null;
     const tags = parseTags(meta.tags);
-    const subtitleParts = [meta.group, meta.public_remark]
+    const group = showCardGroup ? meta.group : undefined;
+    const subtitleParts = [group, meta.public_remark]
       .map((part) => part?.trim())
       .filter((part): part is string => Boolean(part));
     const subtitleLabels = new Set(subtitleParts.map((part) => part.toLowerCase()));
@@ -51,7 +55,7 @@ export function useNodeCardModel(uuid: string, pingBucketCount?: number) {
       osName: resolveOsInfo(meta.os).name,
       loadBaseline: meta.cpu_cores > 0 ? meta.cpu_cores : 4,
     };
-  }, [meta]);
+  }, [meta, showCardGroup]);
 
   // ping 派生的颜色只在 ping item 变化时才变。
   const pingModel = useMemo(

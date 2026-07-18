@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   ChevronDown,
   ChevronUp,
@@ -11,22 +11,26 @@ import { Flag } from "@/components/ui/Flag";
 import { useAuth } from "@/hooks/useAuth";
 import { useAllNodeMeta } from "@/hooks/useNode";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
+import { useHourlyClock } from "@/hooks/useClock";
 import {
   calculateCostSummary,
   formatCnyMoney,
+  formatSignedCny,
   getExchangeRates,
 } from "@/utils/cost";
 import { collectMatchingNodeUuids } from "@/utils/nodeIdentity";
 import { getExpireDaysRemaining, LONG_TERM_EXPIRE_DAYS } from "@/utils/format";
 import { formatBillingCycle } from "@/utils/billing";
 
-type CostSortField = "weight" | "price" | "remain";
+type CostSortField = "weight" | "price" | "remain" | "premium" | "premiumMonthly";
 type CostSortDirection = "asc" | "desc";
 
 const COST_SORT_OPTIONS: Array<{ field: CostSortField; label: string }> = [
   { field: "weight", label: "权重" },
   { field: "price", label: "价格" },
   { field: "remain", label: "剩余" },
+  { field: "premium", label: "溢价" },
+  { field: "premiumMonthly", label: "溢价月摊" },
 ];
 
 function formatCostExpiry(expiredAt: string) {
@@ -36,6 +40,12 @@ function formatCostExpiry(expiredAt: string) {
   if (days < 0) return "已过期";
   if (days === 0) return "今日到期";
   return `${days} 天后到期`;
+}
+
+function premiumTone(value: number) {
+  if (value > 0) return "var(--status-error)";
+  if (value < 0) return "var(--status-success)";
+  return "var(--text-tertiary)";
 }
 
 function CostMetric({
@@ -77,6 +87,7 @@ export function CostSummary({
   const allNodes = useAllNodeMeta();
   const { data: me } = useAuth();
   const themeSettings = useThemeSettings();
+  const now = useHourlyClock();
   const rateApiUrl = themeSettings.costRateApiUrl;
   // 与首页总览同一可见性口径剔除节点(不进数量/总额/明细):主题级隐藏对所有人剔除;
   // 后台 hidden 仅登录管理员可见,访客一律剔除(否则访客能从资产明细读到隐藏节点的
@@ -105,10 +116,11 @@ export function CostSummary({
   });
 
   const ignoredNodes = themeSettings.costIgnoredNodes;
+  const costPremiums = themeSettings.costPremiums;
   const rate = rateQuery.data;
   const summary = useMemo(
-    () => (rate ? calculateCostSummary(nodes, ignoredNodes, rate.rates) : null),
-    [nodes, ignoredNodes, rate],
+    () => (rate ? calculateCostSummary(nodes, ignoredNodes, rate.rates, costPremiums, now) : null),
+    [nodes, ignoredNodes, rate, costPremiums, now],
   );
   const detailRows = useMemo(() => {
     const rows = summary?.details.slice() ?? [];
@@ -120,13 +132,21 @@ export function CostSummary({
           ? a.priceCny
           : sortField === "remain"
             ? a.remainingCny
-            : a.weight;
+            : sortField === "premium"
+              ? a.premiumCny
+              : sortField === "premiumMonthly"
+                ? a.premiumMonthlyCny
+                : a.weight;
       const right =
         sortField === "price"
           ? b.priceCny
           : sortField === "remain"
             ? b.remainingCny
-            : b.weight;
+            : sortField === "premium"
+              ? b.premiumCny
+              : sortField === "premiumMonthly"
+                ? b.premiumMonthlyCny
+                : b.weight;
       const direction = sortDirection === "asc" ? 1 : -1;
       return (left - right) * direction || a.name.localeCompare(b.name, "zh-CN");
     });
@@ -241,6 +261,24 @@ export function CostSummary({
               value={summary ? formatCnyMoney(summary.remainingCny) : "--"}
               valueTone="green"
             />
+            {summary && summary.premiumTotalCny !== 0 && (
+              <CostMetric
+                label="溢价盈亏"
+                value={formatSignedCny(summary.premiumTotalCny)}
+              />
+            )}
+            {summary && summary.premiumMonthlyTotalCny !== 0 && (
+              <CostMetric
+                label="真实月均"
+                value={formatCnyMoney(summary.effectiveMonthlyCny)}
+              />
+            )}
+            {summary && summary.premiumTotalCny !== 0 && (
+              <CostMetric
+                label="实际剩余价值"
+                value={formatCnyMoney(summary.actualRemainingCny)}
+              />
+            )}
           </div>
 
           <section className="cost-summary-detail-section" aria-label="服务器剩余价值明细">
@@ -297,7 +335,26 @@ export function CostSummary({
                           <span className="cost-summary-expire-label">{expiryLabel}</span>
                         </span>
                       </div>
-                      <strong>{formatCnyMoney(detail.remainingCny)}</strong>
+                      <div className="flex items-center gap-2">
+                        {detail.premiumCny !== 0 && (
+                          <span
+                            className="cost-summary-premium-chip"
+                            style={{ "--cost-premium-color": premiumTone(detail.premiumCny) } as CSSProperties}
+                            title="收购溢价（正数=多花钱溢价买入，负数=折价买入）"
+                          >
+                            {formatSignedCny(detail.premiumCny)} 溢价
+                          </span>
+                        )}
+                        {detail.premiumCny !== 0 && detail.amortMonths != null && (
+                          <span
+                            className="cost-summary-premium-chip"
+                            title="溢价月摊 = 收购溢价 ÷ 摊销月数（收购日 → 到期日；无到期按已持有）"
+                          >
+                            月摊 {formatSignedCny(detail.premiumMonthlyCny)} · 摊 {Math.round(detail.amortMonths)} 月
+                          </span>
+                        )}
+                        <strong>{formatCnyMoney(detail.remainingCny)}</strong>
+                      </div>
                     </div>
                   );
                 })

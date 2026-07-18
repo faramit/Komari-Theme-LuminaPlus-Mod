@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CircleDollarSign } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { useAllNodeMeta, useHomeNodeSummaries } from "@/hooks/useNode";
+import { useAllNodeMeta, useHomeNodeSummaries, useNodeStoreStatus } from "@/hooks/useNode";
 import { useHomepagePingOverview } from "@/hooks/usePingMini";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { useViewMode } from "@/hooks/useViewMode";
@@ -17,23 +18,28 @@ import { speedRateColor } from "@/utils/metricTone";
 import {
   getHomeGroupLabel,
   getHomeGroupOptions,
+  getHomeRegionOptions,
   HOME_ALL_GROUP,
+  HOME_ALL_REGION,
   sortHomeGroupOptions,
+  type HomeRegionOption,
 } from "@/utils/homeNodes";
 import { useHomeSort } from "@/hooks/useHomeSort";
 import { useHomeNodeOrder } from "@/hooks/useHomeNodeOrder";
+import { useHourlyClock } from "@/hooks/useClock";
 import { HomeSortControl } from "./HomeSortControl";
 import {
   getOverviewRating,
   type OverviewRating,
   type OverviewRatingStyle,
 } from "@/utils/overviewRating";
-import { Spinner } from "@/components/ui/Spinner";
 import { CompactNodeCard } from "./CompactNodeCard";
 import { CostSummary } from "./CostSummary";
 import { NodeCard } from "./NodeCard";
 import { Flag } from "@/components/ui/Flag";
 import { getDisplayRegionCode } from "@/utils/geo";
+import { preloadAssetsPage } from "@/services/assetsPageLoader";
+import { preloadTodayTrafficStats } from "@/hooks/useTodayTrafficStats";
 
 // 把多个 uuid 拼成单个签名串作为 memo key。逗号安全:uuid 是标准 UUID
 // ([0-9a-f-]),永远不含逗号。
@@ -47,6 +53,16 @@ interface HomeOverview {
   trafficDown: number;
   netUp: number;
   netDown: number;
+}
+
+function TrafficBarsIcon({ size = 19 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden>
+      <rect x="2" y="10" width="4" height="8" rx="1.2" fill="currentColor" />
+      <rect x="8" y="5.5" width="4" height="12.5" rx="1.2" fill="currentColor" />
+      <rect x="14" y="2" width="4" height="16" rx="1.2" fill="currentColor" />
+    </svg>
+  );
 }
 
 function formatCompactBytes(value: number): string {
@@ -67,7 +83,7 @@ function HomeOverviewCards({
   bandwidthRatingLabels,
   assetRatingLabels,
   showDetailButton,
-  onOpenCostSummary,
+  onWarmTraffic,
 }: {
   overview: HomeOverview;
   costSummary: { remainingCny: number } | null;
@@ -81,7 +97,7 @@ function HomeOverviewCards({
   bandwidthRatingLabels: string;
   assetRatingLabels: string;
   showDetailButton: boolean;
-  onOpenCostSummary: () => void;
+  onWarmTraffic?: () => void;
 }) {
   const [trafficValue, trafficUnit] = formatBytes(
     overview.trafficUp + overview.trafficDown,
@@ -185,6 +201,16 @@ function HomeOverviewCards({
             {trafficValue}
             <span className="overview-card-unit">{trafficUnit}</span>
           </p>
+          <Link
+            to="/traffic"
+            className="overview-card-action"
+            aria-label="打开今日流量统计页"
+            title="今日流量统计"
+            onPointerEnter={onWarmTraffic}
+            onFocus={onWarmTraffic}
+          >
+            <TrafficBarsIcon size={15} />
+          </Link>
         </div>
       </article>
 
@@ -222,15 +248,14 @@ function HomeOverviewCards({
         <div className="overview-card-main">
           <p className="overview-card-value">{remainingValue}</p>
           {showDetailButton && (
-            <button
-              type="button"
+            <Link
+              to="/assets"
               className="overview-card-action"
-              onClick={onOpenCostSummary}
               aria-label="打开资产统计详情"
               title="资产统计"
             >
               <CircleDollarSign size={15} />
-            </button>
+            </Link>
           )}
         </div>
       </article>
@@ -288,9 +313,47 @@ function GroupTabs({
   );
 }
 
+// 地区筛选栏:按国旗聚合节点,点击某地区只看该地区;再点一次(或点已选中项)回到全部。
+// 与分组栏是两条独立筛选,可叠加(先分组、后地区)。
+function RegionTabs({
+  regions,
+  selectedRegion,
+  onSelectRegion,
+}: {
+  regions: HomeRegionOption[];
+  selectedRegion: string;
+  onSelectRegion: (region: string) => void;
+}) {
+  return (
+    <section className="home-region-bar" aria-label="地区筛选">
+      <div className="home-region-chips" role="group">
+        {regions.map(({ code, count }) => {
+          const active = selectedRegion === code;
+          return (
+            <button
+              key={code}
+              type="button"
+              className="home-region-chip"
+              data-active={active ? "true" : "false"}
+              aria-pressed={active}
+              onClick={() => onSelectRegion(active ? HOME_ALL_REGION : code)}
+              title={code}
+            >
+              <Flag region={code} size={14} />
+              <span className="home-region-chip-code">{code}</span>
+              <span className="home-region-chip-count">{count}</span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export function NodeGrid() {
   const nodes = useHomeNodeSummaries();
   const allMeta = useAllNodeMeta();
+  const { hydrated: storeHydrated, nodeInfoError } = useNodeStoreStatus();
   const { data: me } = useAuth();
   const themeSettings = useThemeSettings();
   const { mode } = useViewMode();
@@ -300,6 +363,9 @@ export function NodeGrid() {
   const sortField = sortEnabled ? sort.field : themeSettings.homeSortField;
   const sortDirection = sortEnabled ? sort.direction : themeSettings.homeSortDirection;
   const [selectedGroup, setSelectedGroup] = useState(HOME_ALL_GROUP);
+  const [selectedRegion, setSelectedRegion] = useState(HOME_ALL_REGION);
+  const now = useHourlyClock();
+  const queryClient = useQueryClient();
   const [costSummaryOpen, setCostSummaryOpen] = useState(false);
   useHomepagePingOverview();
 
@@ -328,6 +394,14 @@ export function NodeGrid() {
       ),
     [allMeta, me?.logged_in, hiddenUuids],
   );
+  const trafficUuids = useMemo(
+    () => visibleMeta.map((node) => node.uuid),
+    [visibleMeta],
+  );
+  const warmTrafficPage = useCallback(() => {
+    void preloadTodayTrafficStats(queryClient, trafficUuids, Date.now());
+  }, [queryClient, trafficUuids]);
+
   // 「名称」排序需要展示名(摘要无 name),从 meta 注入。
   const nameByUuid = useMemo(() => {
     const map = new Map<string, string>();
@@ -388,9 +462,9 @@ export function NodeGrid() {
   const costSummary = useMemo(
     () =>
       rateQuery.data
-        ? calculateCostSummary(visibleMeta, themeSettings.costIgnoredNodes, rateQuery.data.rates)
+        ? calculateCostSummary(visibleMeta, themeSettings.costIgnoredNodes, rateQuery.data.rates, themeSettings.costPremiums, now)
         : null,
-    [visibleMeta, themeSettings.costIgnoredNodes, rateQuery.data],
+    [visibleMeta, themeSettings.costIgnoredNodes, themeSettings.costPremiums, rateQuery.data, now],
   );
   // 「价格」排序键:月化价格(CNY);免费/忽略/汇率缺失的节点 null,排到默认序之后。
   const priceByUuid = useMemo(() => {
@@ -414,12 +488,24 @@ export function NodeGrid() {
       ),
     [visibleNodes, themeSettings.homeGroupOrder, themeSettings.isReady],
   );
-  const filteredNodes = useMemo(
+  const groupFilteredNodes = useMemo(
     () =>
       selectedGroup === HOME_ALL_GROUP
         ? visibleNodes
         : visibleNodes.filter((node) => getHomeGroupLabel(node.group) === selectedGroup),
     [visibleNodes, selectedGroup],
+  );
+  // 地区选项在分组筛选之后统计,让国旗计数反映当前分组内的分布。
+  const regionOptions = useMemo(
+    () => getHomeRegionOptions(groupFilteredNodes),
+    [groupFilteredNodes],
+  );
+  const filteredNodes = useMemo(
+    () =>
+      selectedRegion === HOME_ALL_REGION
+        ? groupFilteredNodes
+        : groupFilteredNodes.filter((node) => getDisplayRegionCode(node.region) === selectedRegion),
+    [groupFilteredNodes, selectedRegion],
   );
   // 排序在分组筛选之后。离线永远沉底(写死,见 homeSort);实时网速走防抖(键平滑+滞回+5s 重排)。
   const orderedNodes = useHomeNodeOrder({
@@ -435,6 +521,38 @@ export function NodeGrid() {
       setSelectedGroup(HOME_ALL_GROUP);
     }
   }, [groupOptions, selectedGroup]);
+
+  // 选中的地区在当前分组里不存在了(切换分组/节点变化)就回到全部。
+  useEffect(() => {
+    if (
+      selectedRegion !== HOME_ALL_REGION &&
+      !regionOptions.some((option) => option.code === selectedRegion)
+    ) {
+      setSelectedRegion(HOME_ALL_REGION);
+    }
+  }, [regionOptions, selectedRegion]);
+
+  // 地区栏被配置关闭(热更新)时,清掉可能残留的地区筛选,否则会留下一个不可见的过滤条件。
+  useEffect(() => {
+    if (!themeSettings.showRegionBar && selectedRegion !== HOME_ALL_REGION) {
+      setSelectedRegion(HOME_ALL_REGION);
+    }
+  }, [themeSettings.showRegionBar, selectedRegion]);
+
+  useEffect(() => {
+    if (!themeSettings.showGroupTabs && selectedGroup !== HOME_ALL_GROUP) {
+      setSelectedGroup(HOME_ALL_GROUP);
+    }
+  }, [themeSettings.showGroupTabs, selectedGroup]);
+
+  // 空闲时预加载资产页和今日流量。
+  useEffect(() => {
+    const id = setTimeout(() => {
+      preloadAssetsPage();
+      warmTrafficPage();
+    }, 2000);
+    return () => clearTimeout(id);
+  }, [warmTrafficPage]);
 
   // summary 对象每隔约 1s tick 就换新引用,导致 filteredNodes(以及直接映射 uuid)
   // 不停重建。改用稳定的 uuid 签名作为卡片列表的 key,这样只有集合或顺序真正变化时
@@ -455,6 +573,9 @@ export function NodeGrid() {
     themeSettings.isReady && themeSettings.showGroupTabs && groupOptions.length > 0;
   // 节点多于一个才有排序意义;空/单节点时不显示控件。
   const showHomeSort = sortEnabled && visibleNodes.length > 1;
+  // 地区栏:只有一个地区时筛选无意义,>1 才显示。
+  const showRegionBar =
+    themeSettings.isReady && themeSettings.showRegionBar && regionOptions.length > 1;
   // 分组标签栏和卡片网格共用,让标签栏处在同一网格中、正好占一列卡片宽——
   // 边缘和第一张卡片对齐。
   const gridClassName = mode === "compact" ? "grid gap-3 xl:gap-4" : "grid gap-4 xl:gap-5";
@@ -463,10 +584,15 @@ export function NodeGrid() {
       ? "repeat(auto-fill, minmax(min(100%, 340px), 1fr))"
       : "repeat(auto-fill, minmax(min(100%, 360px), 1fr))";
 
-  if (!themeSettings.isReady) {
+  if (!themeSettings.isReady || !storeHydrated) {
+    if (!nodeInfoError) return null;
     return (
-      <div className="flex h-[40vh] items-center justify-center">
-        <Spinner size={24} />
+      <div
+        className="flex h-[40vh] flex-col items-center justify-center gap-2 text-[var(--text-tertiary)]"
+        aria-live="polite"
+      >
+        <span className="text-[14px]">节点数据暂时无法加载</span>
+        <span className="text-[12px]">正在等待后端自动重试</span>
       </div>
     );
   }
@@ -495,7 +621,7 @@ export function NodeGrid() {
           trafficRatingLabels={themeSettings.trafficRatingLabels}
           bandwidthRatingLabels={themeSettings.bandwidthRatingLabels}
           assetRatingLabels={themeSettings.assetRatingLabels}
-          onOpenCostSummary={() => setCostSummaryOpen(true)}
+          onWarmTraffic={warmTrafficPage}
         />
       )}
     </>
@@ -532,6 +658,13 @@ export function NodeGrid() {
           )}
           {showHomeSort && <HomeSortControl state={sort} />}
         </div>
+      )}
+      {showRegionBar && (
+        <RegionTabs
+          regions={regionOptions}
+          selectedRegion={selectedRegion}
+          onSelectRegion={setSelectedRegion}
+        />
       )}
       <div className={gridClassName} style={{ gridTemplateColumns: gridColumns }}>
         {cards}

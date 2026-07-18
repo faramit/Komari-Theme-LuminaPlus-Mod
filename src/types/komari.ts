@@ -143,6 +143,8 @@ export interface ThemeSettings {
   homepagePingBindings?: Record<string, string[]>;
   showHomeOverview?: boolean;
   showGroupTabs?: boolean;
+  showRegionBar?: boolean;
+  showCardGroup?: boolean;
   homeGroupOrder?: string[];
   enableHomeSort?: boolean;
   homeSortField?: "default" | "name" | "speed" | "traffic" | "price";
@@ -154,6 +156,10 @@ export interface ThemeSettings {
   showTrafficRating?: boolean;
   showBandwidthRating?: boolean;
   showAssetRating?: boolean;
+  costPremiums?: Record<
+    string,
+    number | { amount?: number; paidCny?: number; acquiredAt?: string }
+  >;
   trafficRatingLabels?: string;
   bandwidthRatingLabels?: string;
   assetRatingLabels?: string;
@@ -182,7 +188,7 @@ export const PublicConfigSchema = z
     record_enabled: z.boolean().default(true),
     record_preserve_time: z.number().default(0),
     ping_record_preserve_time: z.number().default(0),
-    metric_retention_days: z.number().nullish(),
+    metric_retention_days: z.number().default(0),
     custom_head: z.string().default(""),
     custom_body: z.string().default(""),
     theme_settings: z.record(z.string(), z.unknown()).default({}),
@@ -200,7 +206,7 @@ export interface PublicConfig {
   record_enabled: boolean;
   record_preserve_time: number;
   ping_record_preserve_time: number;
-  metric_retention_days: number | null | undefined;
+  metric_retention_days: number;
   custom_head: string;
   custom_body: string;
   theme_settings: ThemeSettings & Record<string, unknown>;
@@ -298,6 +304,8 @@ export interface PingRecord {
   time: string | number;
   value: number;
   client: string;
+  count?: number;
+  loss?: number | null;
 }
 
 export const PingTaskSchema = z
@@ -327,36 +335,54 @@ export interface PingTask {
 export interface LoadRecordsResponse {
   count: number;
   records: LoadRecord[];
+  rangeStartMs?: number;
+  rangeEndMs?: number;
+  intervalSeconds?: number;
 }
 
 export interface PingRecordsResponse {
   count: number;
   records: PingRecord[];
   tasks: PingTask[];
+  intervalSeconds?: number;
+  rangeStartMs?: number;
+  rangeEndMs?: number;
+  stats?: PingTaskStats[];
 }
 
-export const PingBasicInfoSchema = z
-  .object({
-    client: z.string().default(""),
-    loss: z.number().default(0),
-    min: z.number().default(0),
-    max: z.number().default(0),
-  })
-  .passthrough();
-
-export interface PingBasicInfo {
+export interface PingTaskStats {
   client: string;
+  taskId: number;
+  name: string;
+  type: string;
+  interval: number;
+  total: number;
+  valid: number;
   loss: number;
-  min: number;
-  max: number;
+  min: number | null;
+  max: number | null;
+  avg: number | null;
+  latest: number | null;
+  p50: number | null;
+  p99: number | null;
+  stddev: number | null;
+  p99P50Ratio: number;
 }
 
 export interface PingOverviewItem {
   client: string;
   isAssigned: boolean;
   lastValue: number | null;
-  values: number[];
-  samples: Array<{ time: number; value: number }>;
+  /** metric API 聚合桶的真实宽度；旧 records 接口没有该字段。 */
+  metricIntervalMs?: number;
+  samples: Array<{
+    time: number;
+    value: number;
+    /** 聚合 metric 点覆盖的原始样本数。 */
+    count?: number;
+    /** 聚合窗口的丢包百分比。 */
+    loss?: number | null;
+  }>;
   max: number;
   loss: number | null;
 }

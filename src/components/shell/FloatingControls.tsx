@@ -16,22 +16,27 @@ const APPEARANCE_OPTIONS = [
   { value: "dark", icon: Moon, label: "深色" },
 ] as const;
 
-export function FloatingControls() {
+export function FloatingControls({ onExpandedChange }: { onExpandedChange?: (expanded: boolean) => void }) {
   const [searchParams] = useSearchParams();
   // 在任何 node-store hook 跑之前先读路由:theme-manage 视图这里什么都不渲染,否则下面的 useNodeStoreStatus 会白启动实时节点轮询又立刻丢弃
   if (searchParams.get("view") === "theme-manage") {
     return null;
   }
-  return <FloatingControlsInner />;
+  return <FloatingControlsInner onExpandedChange={onExpandedChange} />;
 }
 
-function FloatingControlsInner() {
+function FloatingControlsInner({ onExpandedChange }: { onExpandedChange?: (expanded: boolean) => void }) {
   const { appearance, setAppearance } = usePreferences();
   const { mode, toggleMode } = useViewMode();
   const { data: me } = useAuth();
   const themeSettings = useThemeSettings();
   const { failureStreak } = useNodeStoreStatus();
   const [collapsed, setCollapsed] = useState(true);
+  const toggleCollapsed = () => setCollapsed((value) => {
+    const next = !value;
+    onExpandedChange?.(!next);
+    return next;
+  });
   const [colorsOpen, setColorsOpen] = useState(false);
   const settingsReady = themeSettings.isReady;
   const showAdmin = settingsReady && themeSettings.enableAdminButton;
@@ -140,7 +145,7 @@ function FloatingControlsInner() {
             className="control-button floating-controls-trigger grid h-9 w-9 place-items-center"
             aria-label={collapsed ? "展开快捷按钮" : "收起快捷按钮"}
             aria-expanded={!collapsed}
-            onClick={() => setCollapsed((value) => !value)}
+            onClick={toggleCollapsed}
             title={collapsed ? "展开快捷按钮" : "收起快捷按钮"}
           >
             <ToggleIcon size={16} />

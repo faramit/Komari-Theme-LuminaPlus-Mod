@@ -427,10 +427,34 @@ background-size: auto, 288px 288px, cover, cover;
   visibility: hidden;
 }
 
+.app-main {
+  --app-gutter: 0.75rem;
+  padding-left: max(var(--app-gutter), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--app-gutter), env(safe-area-inset-right, 0px));
+  padding-top: calc(env(safe-area-inset-top, 0px) + 1.25rem);
+}
+
 @media (min-width: 640px) {
+  .app-main {
+    --app-gutter: 1.25rem;
+  }
+
   .floating-controls {
     top: max(1.25rem, env(safe-area-inset-top));
     right: max(1.25rem, env(safe-area-inset-right));
+  }
+}
+
+@media (min-width: 768px) {
+  .app-main {
+    --app-gutter: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .app-main {
+    --app-gutter: 2rem;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 1.5rem);
   }
 }
 

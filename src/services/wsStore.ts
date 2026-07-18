@@ -14,6 +14,8 @@ interface State {
 
 export interface StoreStatusSnapshot {
   failureStreak: number;
+  hydrated: boolean;
+  nodeInfoError: boolean;
 }
 
 export interface HomeNodeSummary {
@@ -370,7 +372,7 @@ let allNodeMetaSnapshot: NodeInfo[] = [];
 let allNodeMetaSnapshotVersion = -1;
 let homeNodeSummariesSnapshot: HomeNodeSummary[] = [];
 let homeNodeSummariesSnapshotVersion = -1;
-let storeStatusSnapshot: StoreStatusSnapshot = { failureStreak: 0 };
+let storeStatusSnapshot: StoreStatusSnapshot = { failureStreak: 0, hydrated: false, nodeInfoError: false };
 let scrollIdleTimer: number | null = null;
 let scrollTrackingStarted = false;
 let scrollActive = false;
@@ -681,6 +683,7 @@ function applyLatestStatus(records: Record<string, unknown>) {
 
 let hydrated = false;
 let hydratePromise: Promise<void> | null = null;
+let nodeInfoError = false;
 let refreshInFlight = false;
 let nodeInfoInFlight = false;
 let lastNodeInfoSyncAt = 0;
@@ -754,25 +757,36 @@ async function syncNodeInfo(force = false) {
         return Boolean(prev?.hidden) !== Boolean(next?.hidden);
       });
 
+    const storeStatusChanged = !hydrated || nodeInfoError;
     hydrated = true;
+    nodeInfoError = false;
     hydratePromise = Promise.resolve();
     lastNodeInfoSyncAt = Date.now();
-    commit(
-      {
-        ...state,
-        order,
-        metaByUuid,
-        metricsByUuid,
-        trafficTrends,
-      },
-      {
-        meta: touchedMeta,
-        metrics: touchedMetrics,
-        // traffic trend 只由 refreshLatestStatus 改动;syncNodeInfo 原样带过来,这里无需通知。
-        nodeList: nodeListChanged,
-        allNodes: orderChanged || touchedMeta.size > 0,
-      },
-    );
+    if (orderChanged || touchedMeta.size > 0 || touchedMetrics.size > 0 || storeStatusChanged) {
+      commit(
+        {
+          ...state,
+          order,
+          metaByUuid,
+          metricsByUuid,
+          trafficTrends,
+        },
+        {
+          meta: touchedMeta,
+          metrics: touchedMetrics,
+          // traffic trend 只由 refreshLatestStatus 改动;syncNodeInfo 原样带过来,这里无需通知。
+          nodeList: nodeListChanged,
+          allNodes: orderChanged || touchedMeta.size > 0,
+          storeStatus: storeStatusChanged,
+        },
+      );
+    }
+  } catch (error) {
+    if (!nodeInfoError) {
+      nodeInfoError = true;
+      commit(state, { storeStatus: true });
+    }
+    throw error;
   } finally {
     nodeInfoInFlight = false;
   }
@@ -953,10 +967,18 @@ function subscribeByKey(
 }
 
 export function getStoreStatusSnapshot(): StoreStatusSnapshot {
-  if (storeStatusSnapshot.failureStreak === state.failureStreak) {
+  if (
+    storeStatusSnapshot.failureStreak === state.failureStreak &&
+    storeStatusSnapshot.hydrated === hydrated &&
+    storeStatusSnapshot.nodeInfoError === nodeInfoError
+  ) {
     return storeStatusSnapshot;
   }
-  storeStatusSnapshot = { failureStreak: state.failureStreak };
+  storeStatusSnapshot = {
+    failureStreak: state.failureStreak,
+    hydrated,
+    nodeInfoError,
+  };
   return storeStatusSnapshot;
 }
 

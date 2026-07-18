@@ -1,10 +1,10 @@
 {
   "name": "komari-theme-luminaplus-mod",
   "private": true,
-  "version": "1.1.11",
+  "version": "1.6.1",
   "type": "module",
   "description": "Komari-Theme-LuminaPlus-Mod",
-  "author": "codex&shark&shanyang",
+  "author": "faramit",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

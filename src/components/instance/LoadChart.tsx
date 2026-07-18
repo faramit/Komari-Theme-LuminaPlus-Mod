@@ -21,12 +21,13 @@ import {
   interpolateMetricGaps,
 } from "./chartData";
 import { formatBytes, formatTrafficRateLabel } from "@/utils/format";
+import { historyChartRangeSeconds, historyCoverageLabel } from "@/utils/historyRange";
 import { usePreferences } from "@/hooks/usePreferences";
 import type { NodeMetrics } from "@/types/komari";
 
 const LOAD_HISTORY_SAMPLE_LIMIT = 360;
 const LOAD_HISTORY_RENDER_LIMIT = 720;
-
+const REALTIME_HISTORY_SEED_LIMIT = 120;
 const REALTIME_SAMPLE_LIMIT = 600;
 
 const CPU_KEYS = ["cpu"];
@@ -110,7 +111,7 @@ function getSeriesLabel(key: string) {
 
 function pointFromNode(node: NodeMetrics): ChartPoint {
   return {
-    time: Math.floor(Date.now() / 1000),
+    time: Date.now() / 1000,
     cpu: node.cpuPct,
     ram: node.ramTotal > 0 ? (node.ramUsed / node.ramTotal) * 100 : 0,
     swap: node.swapTotal > 0 ? (node.swapUsed / node.swapTotal) * 100 : 0,
@@ -162,6 +163,7 @@ function buildBaseOptions({
   spanGaps,
   axisKind = "default",
   axisSize = 52,
+  xRange,
 }: {
   title: string;
   keys: string[];
@@ -172,6 +174,7 @@ function buildBaseOptions({
   spanGaps?: boolean;
   axisKind?: "default" | "percent" | "network" | "count";
   axisSize?: number;
+  xRange?: [number, number] | null;
 }): Omit<uPlot.Options, "width" | "height"> {
   const isDark = resolvedAppearance === "dark";
   const { grid, text } = getAxisColors(isDark);
@@ -180,7 +183,10 @@ function buildBaseOptions({
     padding: [8, 12, 10, 2],
     cursor: { drag: { x: true, y: false } },
     legend: { show: false },
-    scales: { x: { time: true }, y: { auto: true } },
+    scales: {
+      x: xRange ? { time: true, auto: false, range: () => xRange } : { time: true },
+      y: { auto: true },
+    },
     axes: [
       {
         stroke: text,
@@ -245,6 +251,7 @@ const ChartCard = memo(function ChartCard({
   spanGaps,
   axisKind,
   axisSize,
+  xRange,
 }: {
   icon: ReactNode;
   title: string;
@@ -262,9 +269,9 @@ const ChartCard = memo(function ChartCard({
   spanGaps?: boolean;
   axisKind?: "default" | "percent" | "network" | "count";
   axisSize?: number;
+  xRange?: [number, number] | null;
 }) {
   const dataRef = useRef<uPlot.AlignedData>([[]]);
-  const prevRangeHours = useRef(rangeHours);
   const [tooltip, setTooltip] = useState<ChartTooltipState>({
     show: false,
     left: 0,
@@ -288,8 +295,9 @@ const ChartCard = memo(function ChartCard({
         spanGaps,
         axisKind,
         axisSize,
+        xRange,
       }),
-    [axisKind, axisSize, colors, keys, rangeHours, resolvedAppearance, spanGaps, title, unit],
+    [axisKind, axisSize, colors, keys, rangeHours, resolvedAppearance, spanGaps, title, unit, xRange],
   );
 
   // 不含尺寸的增强配置 (base + 交互 hook)。resize 时保持稳定，最终对象上只有 width/height 变。
@@ -326,10 +334,6 @@ const ChartCard = memo(function ChartCard({
     [enhancedOptions, width, height],
   );
 
-  useEffect(() => {
-    prevRangeHours.current = rangeHours;
-  }, [rangeHours]);
-
   return (
     <div
       className="instance-chart-card"
@@ -347,10 +351,10 @@ const ChartCard = memo(function ChartCard({
       </header>
       <div className="instance-uplot-wrap">
         <UplotReact
-          key={uuid}
+          key={`${uuid}-${rangeHours}`}
           options={chartOptions}
           data={data}
-          resetScales={rangeHours === 0 || rangeHours !== prevRangeHours.current}
+          resetScales={false}
         />
         <ChartTooltip tooltip={tooltip} />
       </div>
@@ -416,9 +420,13 @@ export function LoadChart({
 
   const points = useMemo<ChartPoint[]>(() => {
     if (isRealtime) {
-      // In realtime mode we simply use the collected realtime points, sorted and limited.
-      const sorted = [...realtimePoints].sort((a, b) => a.time - b.time);
-      return sorted.slice(-REALTIME_SAMPLE_LIMIT);
+      const initial = historyPoints.slice(-REALTIME_HISTORY_SEED_LIMIT);
+      const merged = [...initial, ...realtimePoints].sort((a, b) => a.time - b.time);
+      const deduped = merged.filter((point, index, arr) => {
+        const next = arr[index + 1];
+        return !next || Math.abs(next.time - point.time) >= 1;
+      });
+      return deduped.slice(-REALTIME_SAMPLE_LIMIT);
     }
     return historyPoints;
   }, [historyPoints, isRealtime, realtimePoints]);
@@ -434,6 +442,17 @@ export function LoadChart({
   const coverageSummary = points.length
     ? `${formatChartCoverageTime(points[0].time)} - ${formatChartCoverageTime(points[points.length - 1].time)}`
     : "—";
+  const requestedXRange = useMemo(
+    () => (isRealtime ? null : historyChartRangeSeconds(data)),
+    [data, isRealtime],
+  );
+  const coverageLabel = useMemo(
+    () =>
+      isRealtime
+        ? null
+        : historyCoverageLabel(data, points[0]?.time, points[points.length - 1]?.time),
+    [data, isRealtime, points],
+  );
 
   if (isLoading) {
     return <InstanceChartLoading title="负载图表" />;
@@ -453,8 +472,8 @@ export function LoadChart({
       aside={
         <div className="instance-chart-headmeta">
           <div className="instance-chart-meta" aria-label="图表数据范围">
-            <span>
-              覆盖 <strong>{coverageSummary}</strong>
+            <span title={coverageSummary}>
+              <strong>{coverageLabel ?? `覆盖 ${coverageSummary}`}</strong>
             </span>
             <span>
               采样 <strong>{sampleSummary}</strong>
@@ -495,6 +514,7 @@ export function LoadChart({
           unit="%"
           spanGaps={connectNulls}
           axisKind="percent"
+          xRange={requestedXRange}
         />
         <ChartCard
           icon={<MemoryStick size={13} />}
@@ -526,6 +546,7 @@ export function LoadChart({
           unit="%"
           spanGaps={connectNulls}
           axisKind="percent"
+          xRange={requestedXRange}
         />
         <ChartCard
           icon={<HardDrive size={13} />}
@@ -549,6 +570,7 @@ export function LoadChart({
           unit="%"
           spanGaps={connectNulls}
           axisKind="percent"
+          xRange={requestedXRange}
         />
         <ChartCard
           icon={<Network size={13} />}
@@ -577,6 +599,7 @@ export function LoadChart({
           spanGaps={connectNulls}
           axisKind="network"
           axisSize={78}
+          xRange={requestedXRange}
         />
         <ChartCard
           icon={<Workflow size={13} />}
@@ -599,6 +622,7 @@ export function LoadChart({
           rangeHours={hours}
           spanGaps={connectNulls}
           axisKind="count"
+          xRange={requestedXRange}
         />
         <ChartCard
           icon={<Gauge size={13} />}
@@ -627,6 +651,7 @@ export function LoadChart({
           rangeHours={hours}
           spanGaps={connectNulls}
           axisKind="count"
+          xRange={requestedXRange}
         />
       </div>
     </InstancePanel>

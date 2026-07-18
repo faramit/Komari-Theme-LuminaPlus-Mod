@@ -107,11 +107,25 @@ export function useHomeNodeSummaries(): HomeNodeSummary[] {
   );
 }
 
-export function useNodeStoreStatus() {
-  useEnsured();
+const EMPTY_STORE_STATUS = {
+  failureStreak: 0,
+  hydrated: false,
+  nodeInfoError: false,
+} as const;
+
+export function useNodeStoreStatus(enabled = true) {
+  useEnsured(enabled);
+  const subscribe = useCallback(
+    (listener: () => void) => (enabled ? subscribeStoreStatus(listener) : noopUnsubscribe),
+    [enabled],
+  );
+  const getSnapshot = useCallback(
+    () => (enabled ? getStoreStatusSnapshot() : EMPTY_STORE_STATUS),
+    [enabled],
+  );
   return useSyncExternalStore(
-    subscribeStoreStatus,
-    getStoreStatusSnapshot,
-    getStoreStatusSnapshot,
+    subscribe,
+    getSnapshot,
+    getSnapshot,
   );
 }

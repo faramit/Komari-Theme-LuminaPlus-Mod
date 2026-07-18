@@ -6,7 +6,7 @@ import {
   normalizeBackgroundUrl,
   normalizeSurfaceOpacity,
 } from "@/utils/background";
-import { DEFAULT_COST_RATE_API_URL, normalizeCostIgnoredNodes, normalizeCostRateApiUrl } from "@/utils/cost";
+import { DEFAULT_COST_RATE_API_URL, normalizeCostIgnoredNodes, normalizeCostPremiums, normalizeCostRateApiUrl, type CostPremiumEntry } from "@/utils/cost";
 import { normalizeNodeIdentityList } from "@/utils/nodeIdentity";
 import { normalizeHomeGroupOrder } from "@/utils/homeNodes";
 import {
@@ -34,6 +34,8 @@ export interface ResolvedThemeSettings {
   homepagePingBindings: HomepagePingTaskBindings;
   showHomeOverview: boolean;
   showGroupTabs: boolean;
+  showRegionBar: boolean;
+  showCardGroup: boolean;
   homeGroupOrder: string[];
   enableHomeSort: boolean;
   homeSortField: HomeSortField;
@@ -55,6 +57,7 @@ export interface ResolvedThemeSettings {
   hiddenNodes: string[];
   costIgnoredNodes: string[];
   costRateApiUrl: string;
+  costPremiums: Record<string, CostPremiumEntry>;
   backgroundImage: string;
   backgroundImageMobile: string;
   backgroundAlignment: string;
@@ -70,6 +73,8 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   homepagePingBindings: {},
   showHomeOverview: true,
   showGroupTabs: true,
+  showRegionBar: false,
+  showCardGroup: false,
   homeGroupOrder: [],
   enableHomeSort: true,
   homeSortField: "default",
@@ -91,6 +96,7 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   hiddenNodes: [],
   costIgnoredNodes: [],
   costRateApiUrl: DEFAULT_COST_RATE_API_URL,
+  costPremiums: {},
   backgroundImage: "",
   backgroundImageMobile: "",
   backgroundAlignment: DEFAULT_BACKGROUND_ALIGNMENT,
@@ -159,6 +165,8 @@ export function normalizeThemeSettings(
     homepagePingBindings: normalizeHomepagePingTaskBindings(settings?.homepagePingBindings),
     showHomeOverview: enabledUnlessFalse(settings?.showHomeOverview),
     showGroupTabs: enabledUnlessFalse(settings?.showGroupTabs),
+    showRegionBar: enabledUnlessFalse(settings?.showRegionBar),
+    showCardGroup: enabledUnlessFalse(settings?.showCardGroup),
     homeGroupOrder: normalizeHomeGroupOrder(settings?.homeGroupOrder),
     enableHomeSort: enabledUnlessFalse(settings?.enableHomeSort),
     ...normalizeHomeSortDefault(settings?.homeSortField, settings?.homeSortDirection),
@@ -182,6 +190,7 @@ export function normalizeThemeSettings(
     hiddenNodes: normalizeNodeIdentityList(settings?.hiddenNodes),
     costIgnoredNodes: normalizeCostIgnoredNodes(settings?.costIgnoredNodes),
     costRateApiUrl: normalizeCostRateApiUrl(settings?.costRateApiUrl),
+    costPremiums: normalizeCostPremiums(settings?.costPremiums),
     backgroundImage: normalizeBackgroundUrl(settings?.backgroundImage),
     backgroundImageMobile: normalizeBackgroundUrl(settings?.backgroundImageMobile),
     backgroundAlignment: normalizeBackgroundAlignment(settings?.backgroundAlignment),

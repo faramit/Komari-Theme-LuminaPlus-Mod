@@ -287,23 +287,33 @@
   background: color-mix(in srgb, var(--hover-bg-a) 72%, transparent);
 }
 
-.home-group-tabs button[data-active="true"] {
+.home-group-tabs button[data-active="true"],
+.home-region-chip[data-active="true"] {
   border-color: rgba(82, 82, 91, 0.28);
+  box-shadow:
+    0 10px 22px -18px rgba(0, 0, 0, 0.34),
+    inset 0 0 0 1px rgba(82, 82, 91, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+[data-appearance="dark"] .home-group-tabs button[data-active="true"],
+[data-appearance="dark"] .home-region-chip[data-active="true"] {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.home-group-tabs button[data-active="true"],
+.home-region-chip[data-active="true"] {
   background:
     linear-gradient(
       180deg,
       color-mix(in srgb, var(--surface-elev-a) 96%, white 4%) 0%,
       color-mix(in srgb, var(--hover-bg-a) 54%, var(--surface-a)) 100%
     );
-  box-shadow:
-    0 10px 22px -18px rgba(0, 0, 0, 0.34),
-    inset 0 0 0 1px rgba(82, 82, 91, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.72);
   color: var(--text-primary);
 }
 
-[data-appearance="dark"] .home-group-tabs button[data-active="true"] {
-  border-color: rgba(255, 255, 255, 0.12);
+[data-appearance="dark"] .home-group-tabs button[data-active="true"],
+[data-appearance="dark"] .home-region-chip[data-active="true"] {
   background:
     linear-gradient(
       180deg,
@@ -485,6 +495,85 @@
 
 .home-sort-item[data-active="true"] svg {
   color: var(--accent-500);
+}
+
+/* 地区筛选栏:与分组栏同一套面板视觉(surface-a + 描边 + 圆角 + 浮起阴影);国旗 chip 换行铺开。
+   chip 的悬停/选中态与分组 tab 共用同一组样式。 */
+.home-region-bar {
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--border-strong) 54%, transparent);
+  border-radius: 16px;
+  background: var(--surface-a);
+  box-shadow:
+    0 14px 30px -26px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 color-mix(in srgb, white 16%, transparent);
+}
+
+.home-region-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.home-region-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.home-region-chip:hover {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--hover-bg-a) 72%, transparent);
+}
+
+.home-region-chip-code {
+  letter-spacing: 0.02em;
+}
+
+/* 数量角标:圆角小胶囊,选中时不额外变色,靠 chip 整体高亮即可。 */
+.home-region-chip-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--border-strong) 22%, transparent);
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-region-chip[data-active="true"] .home-region-chip-count {
+  background: color-mix(in srgb, var(--accent-500) 20%, transparent);
+  color: var(--text-secondary);
+}
+
+@media (max-width: 560px) {
+  .home-region-chip {
+    min-height: 30px;
+    padding: 0 8px;
+  }
 }
 
 

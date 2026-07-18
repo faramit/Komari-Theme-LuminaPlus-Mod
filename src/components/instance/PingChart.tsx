@@ -17,9 +17,13 @@ import { ChartTooltip, SwitchToggle } from "./ChartParts";
 import {
   cutPeakValues,
   detectTypicalIntervalSeconds,
+  downsampleAligned,
   insertMetricGapSentinels,
+  smoothByCount,
 } from "./chartData";
 import { latencyHeatColor, lossHeatColor } from "@/utils/metricTone";
+import { historyChartRangeSeconds, historyCoverageLabel } from "@/utils/historyRange";
+import { resolvePingChartInterval } from "@/utils/pingMetrics";
 import { usePreferences } from "@/hooks/usePreferences";
 import type { PingRecord } from "@/types/komari";
 import type { TimedMetricPoint } from "./chartData";
@@ -36,29 +40,13 @@ function percentileFromSorted(sorted: number[], ratio: number) {
   return sorted[lower] + (sorted[upper] - sorted[lower]) * weight;
 }
 
-// 在 series 数组里左右双向扫描，找到离 idx 最近的有效数值点。
-// 用于 tooltip 中 off-phase (undefined) 时取其最近的有效采样值显示。
-function findNearestValue(
-  series: Array<number | null | undefined>,
-  idx: number,
-): number | null {
-  const maxOffset = Math.max(idx, series.length - 1 - idx);
-  for (let offset = 1; offset <= maxOffset; offset += 1) {
-    const leftIdx = idx - offset;
-    if (leftIdx >= 0) {
-      const left = series[leftIdx];
-      if (typeof left === "number" && Number.isFinite(left)) return left;
-    }
-    const rightIdx = idx + offset;
-    if (rightIdx < series.length) {
-      const right = series[rightIdx];
-      if (typeof right === "number" && Number.isFinite(right)) return right;
-    }
-  }
-  return null;
-}
-
-
+// 渲染前先按时间分桶降采样到这么多点（避免 uPlot 抽稀尖刺）。
+const MAX_RENDER_POINTS = 160;
+// "削峰平滑"关闭：窗口=1 即不再叠加滑动平均（之前默认 7 会把长时段磨成近似直线），
+// 改由保峰降采样让真实尖峰穿透显示——"关闭"此时真的等于"不额外平滑"。
+const SMOOTH_WINDOW_POINTS = 1;
+// "削峰平滑"开启：均值降采样 + EWMA 削峰 + 更强滑动平均，得到平滑曲线。点窗调大 → 更平滑。
+const SMOOTH_WINDOW_POINTS_PEAK = 13;
 
 export function PingChart({
   uuid,
@@ -69,8 +57,7 @@ export function PingChart({
   hours: number;
   active?: boolean;
 }) {
-  const [refreshKey, setRefreshKey] = useState(0);
-  const { data, isLoading } = usePingRecords(uuid, hours, active, refreshKey);
+  const { data, isLoading, refetch } = usePingRecords(uuid, hours, active);
   const { resolvedAppearance } = usePreferences();
   const { w, h, ref: chartSizeRef } = useResponsiveChartSize("wide");
   const [hiddenTasks, setHiddenTasks] = useState<Set<number>>(new Set());
@@ -135,10 +122,10 @@ export function PingChart({
   }, [tasks]);
 
   const chart = useMemo(() => {
-    // 固定间隔网格：按 task interval 最小值创建等间隔点，每条记录对齐到
-    // Math.floor(time / interval) * interval，确保工具提示步长与后端间隔一致。
+    // 为每个 task 构建完整的对齐序列。显隐通过每条 series 的 `show` 标志 (以及渲染门控)
+    // 实现，所以切换某条线不会重跑这套分桶流程。
     if (!data?.records.length || !tasks.length) return null;
-
+    const pointMap = new Map<number, TimedMetricPoint>();
     const sortedRecords = data.records
       .map((record) => ({
         record,
@@ -146,37 +133,32 @@ export function PingChart({
       }))
       .filter(({ time }) => time > 0)
       .sort((left, right) => left.time - right.time);
-    if (sortedRecords.length === 0) return null;
     const taskIntervals = tasks
       .map((task) => task.interval)
       .filter((value): value is number => typeof value === "number" && value > 0);
-    const fallbackInterval = taskIntervals.length > 0
-      ? Math.min(...taskIntervals)
-      : detectTypicalIntervalSeconds(sortedRecords.map(({ time }) => time), 60);
-    const safeInterval = Math.max(5, Math.min(600, fallbackInterval));
+    const detectedInterval = detectTypicalIntervalSeconds(
+      sortedRecords.map(({ time }) => time),
+      60,
+    );
+    const fallbackInterval = resolvePingChartInterval(
+      data.intervalSeconds,
+      taskIntervals.length > 0 ? Math.min(...taskIntervals) : null,
+      detectedInterval,
+    );
+    const tolerance = Math.min(6, Math.max(0.8, fallbackInterval * 0.25));
 
-    const startTime = sortedRecords[0].time;
-    const endTime = sortedRecords[sortedRecords.length - 1].time;
-    const gridStart = Math.floor(startTime / safeInterval) * safeInterval;
-    const gridEnd = Math.ceil(endTime / safeInterval) * safeInterval;
-    const pointCount = Math.round((gridEnd - gridStart) / safeInterval) + 1;
-
-    const pointMap = new Map<number, TimedMetricPoint>();
-    for (let i = 0; i < pointCount; i += 1) {
-      const t = gridStart + i * safeInterval;
-      const point: TimedMetricPoint = { time: t };
-      for (const taskKey of taskKeys) {
-        point[taskKey] = undefined;
-      }
-      pointMap.set(t, point);
-    }
-
+    // records 已按时间排序，且 anchor 之间间距总是大于 `tolerance` (只有当现有 anchor 都不
+    // 在容差内才会新建)，所以一条 record 至多匹配一个 anchor，且必为最近的那个。这样就是 O(n)
+    // 合并，而非原来的 O(records × anchors)。
+    let lastAnchor = Number.NEGATIVE_INFINITY;
     for (const { record, time } of sortedRecords) {
       if (!taskKeySet.has(String(record.task_id))) continue;
-      const gridTime = Math.floor(time / safeInterval) * safeInterval;
-      const point = pointMap.get(gridTime);
-      if (!point) continue;
-      point[String(record.task_id)] = record.value >= 0 ? record.value : null;
+      const anchor = time - lastAnchor <= tolerance ? lastAnchor : time;
+      if (anchor === time) lastAnchor = time;
+      const current = pointMap.get(anchor) ?? { time: anchor };
+      // value>=0 都是成功（0 表示往返 <1ms，被后端取整成 0）；只有 value<0（即 -1）才是真丢包→断点。
+      current[String(record.task_id)] = record.value >= 0 ? record.value : null;
+      pointMap.set(anchor, current);
     }
 
     let chartPoints = [...pointMap.values()].sort((a, b) => a.time - b.time);
@@ -185,9 +167,10 @@ export function PingChart({
     }
     chartPoints = insertMetricGapSentinels(chartPoints, {
       intervals: new Map(
-        tasks
-          .filter((task) => typeof task.interval === "number" && task.interval > 0)
-          .map((task) => [String(task.id), task.interval] as const),
+        tasks.map((task) => [
+          String(task.id),
+          resolvePingChartInterval(data.intervalSeconds, task.interval, fallbackInterval),
+        ] as const),
       ),
       defaultInterval: fallbackInterval,
       matchToleranceRatio: 0.25,
@@ -199,12 +182,40 @@ export function PingChart({
       chartPoints.map((point) => point[taskKey]),
     );
 
-    return [times, ...perTask] as uPlot.AlignedData;
+    // 关闭削峰：保峰降采样（真实尖峰穿透）；开启削峰：均值降采样（配合后面的强平滑磨平尖峰）。
+    const reduced = downsampleAligned(times, perTask, MAX_RENDER_POINTS, !cutPeak);
+    // 关闭削峰时窗口=1（不额外平滑，如实显示）；开启削峰时点窗加大（并已在前面叠加 cutPeakValues 削峰）。
+    const smoothed = smoothByCount(
+      reduced.perTask,
+      cutPeak ? SMOOTH_WINDOW_POINTS_PEAK : SMOOTH_WINDOW_POINTS,
+    );
+
+    return [reduced.times, ...smoothed] as uPlot.AlignedData;
   }, [cutPeak, data, taskKeySet, taskKeys, tasks]);
 
   useEffect(() => {
     if (chart) chartRef.current = chart;
   }, [chart]);
+
+  const requestedXRange = useMemo(() => historyChartRangeSeconds(data), [data]);
+  const coverageMeta = useMemo(() => {
+    if (!data) return null;
+    const taskIntervals = tasks
+      .map((task) => task.interval)
+      .filter((value) => Number.isFinite(value) && value > 0);
+    return {
+      rangeStartMs: data.rangeStartMs,
+      rangeEndMs: data.rangeEndMs,
+      intervalSeconds:
+        data.intervalSeconds ??
+        (taskIntervals.length > 0 ? Math.min(...taskIntervals) : undefined),
+    };
+  }, [data, tasks]);
+  const coverageLabel = useMemo(() => {
+    const times = chart?.[0];
+    if (!times?.length) return null;
+    return historyCoverageLabel(coverageMeta, times[0], times[times.length - 1]);
+  }, [chart, coverageMeta]);
 
   const yRange = useMemo<[number | null, number | null]>(() => {
     if (!chart) return [null, null];
@@ -247,13 +258,10 @@ export function PingChart({
         visibleTasks
           .map((task) => {
             const taskIndex = taskIndexById.get(task.id) ?? 0;
-            const series = chartRef.current[taskIndex + 1] as Array<number | null | undefined> | undefined;
-            const raw = series?.[idx] as number | null | undefined;
-            // off-phase (undefined) 扫描最近的有效采样值；null（丢包）原样保留
-            const value = raw === undefined ? (series ? findNearestValue(series, idx) : null) : raw;
+            const raw = chartRef.current[taskIndex + 1]?.[idx] as number | null | undefined;
             return {
               label: taskLabels.get(task.id) ?? `任务 #${task.id}`,
-              raw: typeof value === "number" && Number.isFinite(value) ? value : null,
+              raw: typeof raw === "number" && Number.isFinite(raw) ? raw : null,
               color: taskColors.get(task.id) ?? colorForSeries(taskIndex, tasks.length),
             };
           })
@@ -274,7 +282,9 @@ export function PingChart({
       cursor: { drag: { x: true, y: false } },
       legend: { show: false },
       scales: {
-        x: { time: true },
+        x: requestedXRange
+          ? { time: true, auto: false, range: () => requestedXRange }
+          : { time: true },
         y: { auto: false, range: yRange },
       },
       axes: [
@@ -309,7 +319,7 @@ export function PingChart({
         setCursor: [tooltipHooks.onSetCursor],
       },
     };
-  }, [chart, connectNulls, hiddenTasks, hours, isDark, taskColors, taskIndexById, taskLabels, tasks, visibleTasks, yRange]);
+  }, [chart, connectNulls, hiddenTasks, hours, isDark, requestedXRange, taskColors, taskIndexById, taskLabels, tasks, visibleTasks, yRange]);
 
   const options = useMemo<uPlot.Options | null>(
     () => (baseOptions ? { ...baseOptions, width: w, height: h } : null),
@@ -328,27 +338,39 @@ export function PingChart({
       records.sort((a, b) => toChartSeconds(a.time) - toChartSeconds(b.time));
     }
 
+    const serverStats = new Map(
+      (data?.stats ?? [])
+        .filter((stat) => !stat.client || stat.client === uuid)
+        .map((stat) => [stat.taskId, stat] as const),
+    );
+
     return tasks.map((task, index) => {
       const records = grouped.get(task.id) ?? [];
+      const server = serverStats.get(task.id);
       // 有效样本含 0（0 = 往返 <1ms 被取整）；只有 value<0（-1）才是丢包，统计里排除。
       const valid = records
         .filter((record) => record.value >= 0)
         .map((record) => record.value)
         .sort((a, b) => a - b);
-      const latest = [...records].reverse().find((record) => record.value >= 0)?.value ?? null;
-      const avg = valid.length
-        ? valid.reduce((sum, value) => sum + value, 0) / valid.length
-        : null;
-      const min = valid.length ? valid[0] : null;
-      const max = valid.length ? valid[valid.length - 1] : null;
-      const p50 = percentileFromSorted(valid, 0.5);
-      const p99 = percentileFromSorted(valid, 0.99);
-      // p50 现在可能为 0（亚毫秒任务），需要显式 null-check 避免 p99/0 得到 Infinity，
-      // 同时 p99=0 是有意义的（所有采样值取整为 0），不应被 falsy 守卫吞掉。
-      const volatility = p50 != null && p99 != null && p50 > 0 ? p99 / p50 : null;
-      const total = records.length;
-      const lost = records.filter((record) => record.value < 0).length;
-      const loss = total > 0 ? (lost / total) * 100 : task.loss;
+      const latest = server
+        ? server.latest
+        : [...records].reverse().find((record) => record.value >= 0)?.value ?? null;
+      const avg = server
+        ? server.avg
+        : valid.length
+          ? valid.reduce((sum, value) => sum + value, 0) / valid.length
+          : null;
+      const min = server ? server.min : valid.length ? valid[0] : null;
+      const max = server ? server.max : valid.length ? valid[valid.length - 1] : null;
+      const p50 = server ? server.p50 : percentileFromSorted(valid, 0.5);
+      const p99 = server ? server.p99 : percentileFromSorted(valid, 0.99);
+      // p50 现在可能为 0（亚毫秒任务），`p50 &&` 守卫仍需保留：避免 p99/0 得到 Infinity。
+      const volatility = p50 && p99 ? p99 / p50 : null;
+      const total = server?.total ?? records.length;
+      const lost = server
+        ? Math.max(0, server.total - server.valid)
+        : records.filter((record) => record.value < 0).length;
+      const loss = server?.loss ?? (total > 0 ? (lost / total) * 100 : task.loss);
       return {
         ...task,
         latest,
@@ -364,7 +386,7 @@ export function PingChart({
         color: taskColors.get(task.id) ?? colorForSeries(index, tasks.length),
       };
     });
-  }, [data, taskColors, tasks]);
+  }, [data, taskColors, tasks, uuid]);
 
   const toggleTask = (taskId: number) => {
     setHiddenTasks((prev) => {
@@ -392,7 +414,7 @@ export function PingChart({
   }
 
   return (
-    <InstancePanel title="Ping 图表">
+    <InstancePanel title="Ping 图表" description={coverageLabel ?? undefined}>
       <div className="instance-ping-toolbar">
         <SwitchToggle
           label="削峰平滑"
@@ -410,9 +432,7 @@ export function PingChart({
           {hiddenTasks.size === 0 ? <EyeOff size={14} /> : <Eye size={14} />}
           {hiddenTasks.size === 0 ? "隐藏全部" : "显示全部"}
         </button>
-        <button type="button" className="instance-toggle-button" onClick={() => {
-          setRefreshKey((k) => k + 1);
-        }}>
+        <button type="button" className="instance-toggle-button" onClick={() => void refetch()}>
           <RefreshCw size={14} />
           刷新
         </button>
@@ -462,8 +482,9 @@ export function PingChart({
             <UplotReact
               // 把 cutPeak/connectNulls 纳入 key:这两个 toggle 改了数据与 y 轴 range,
               // 复用同一 uPlot 实例(resetScales=false)时会卡成空白且关掉也不恢复;
-              // 改变 key 强制重建一个干净实例,开关都能正确重绘。轮询刷新走 data prop 原地
-              // setData,不进 key——否则每次 refetch 都重建实例、丢掉进行中的拖拽缩放。
+              // 改变 key 强制重建一个干净实例,开关都能正确重绘。key 不含 data —— 详情页无轮询
+              // (useRecords 无 refetchInterval),数据只在用户点"刷新"时变;彼时 tasks/yRange 换新
+              // 引用会让 options 整体重建(而非 setData),但刷新本就是一次性主动重绘,可接受。
               key={`${uuid}-${hours}-${cutPeak ? "smooth" : "raw"}-${connectNulls ? "span" : "gap"}`}
               options={options}
               data={chart}
