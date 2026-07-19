@@ -7,6 +7,19 @@ import { isNodeViewMode, type NodeViewMode } from "@/utils/themeSettings";
 const DESKTOP_OVERRIDE_KEY = "luminaplusmod:node-view-mode-session:desktop";
 const MOBILE_OVERRIDE_KEY = "luminaplusmod:node-view-mode-session:mobile";
 const MOBILE_QUERY = "(max-width: 720px)";
+const VIEW_MODE_CYCLE: readonly NodeViewMode[] = ["large", "compact", "mini", "list"];
+const MOBILE_VIEW_MODES: readonly NodeViewMode[] = ["large", "compact", "mini"];
+
+function normalizeViewModeForDevice(mode: NodeViewMode, device: "desktop" | "mobile"): NodeViewMode {
+  return device === "mobile" && mode === "list" ? "compact" : mode;
+}
+
+function getNextViewMode(mode: NodeViewMode, device: "desktop" | "mobile"): NodeViewMode {
+  const cycle = device === "mobile" ? MOBILE_VIEW_MODES : VIEW_MODE_CYCLE;
+  const normalized = normalizeViewModeForDevice(mode, device);
+  const index = cycle.indexOf(normalized);
+  return cycle[(index + 1) % cycle.length] ?? cycle[0];
+}
 
 interface ViewModeState {
   device: "desktop" | "mobile";
@@ -156,17 +169,17 @@ function subscribe(listener: () => void) {
 export function useViewMode() {
   const themeSettings = useThemeSettings();
   const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-  const defaultMode =
-    state.device === "mobile"
-      ? themeSettings.mobileNodeViewMode
-      : themeSettings.desktopNodeViewMode;
-  const mode = state.override ?? defaultMode;
+  const isMobile = state.device === "mobile";
+  const defaultMode = isMobile
+    ? themeSettings.mobileNodeViewMode
+    : themeSettings.desktopNodeViewMode;
+  const resolved = state.override ?? defaultMode;
+  const mode = normalizeViewModeForDevice(resolved, state.device);
+  const nextMode = getNextViewMode(mode, state.device);
 
   const setMode = useCallback(
     (next: NodeViewMode) => {
       const key = getOverrideKey(state.device);
-      // 选中当前主题默认值时，清掉 session override 重新跟随默认值，而不是钉一个
-      // 永远去不掉的 override（那样还会让未来的默认值变化无法生效）。
       if (next === defaultMode) {
         clearOverride(key);
       } else {
@@ -179,12 +192,13 @@ export function useViewMode() {
   );
 
   const toggleMode = useCallback(() => {
-    setMode(mode === "compact" ? "large" : "compact");
-  }, [mode, setMode]);
+    setMode(nextMode);
+  }, [nextMode, setMode]);
 
   return {
     device: state.device,
     mode,
+    nextMode,
     defaultMode,
     isOverridden: state.override != null,
     setMode,

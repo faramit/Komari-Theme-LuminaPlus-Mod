@@ -17,6 +17,13 @@ export function pingEmptyLabels(hasHomepagePingBinding: boolean): { title: strin
     : { title: "未配置首页 Ping", text: "未配置" };
 }
 
+/** 生成"Debian 12"这类简短系统标签。 */
+export function formatOsLabel(osName: string, rawOs?: string | null): string {
+  if (!rawOs) return osName;
+  const match = rawOs.match(/\d+(?:\.\d+)?/);
+  return match ? `${osName} ${match[0]}` : osName;
+}
+
 /** 节点卡片头部"查看实例详情"链接的 title 和 aria-label。 */
 export function nodeDetailLinkLabels(name: string, osName: string) {
   return {

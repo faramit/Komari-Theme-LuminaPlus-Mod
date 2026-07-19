@@ -5,6 +5,8 @@
 @import "./cost-summary.css";
 @import "./node-card.css";
 @import "./compact-node-card.css";
+@import "./mini-node-card.css";
+@import "./node-list.css";
 @import "./os-logo.css";
 @import "./traffic-stats.css";
 

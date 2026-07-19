@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangle, ChevronLeft, ChevronRight, LayoutGrid, Monitor, Palette, Rows3, Settings, SlidersHorizontal, Sun, Moon } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Grid3x3, LayoutGrid, List, Monitor, Palette, Rows3, Settings, SlidersHorizontal, Sun, Moon } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { MetricColorPicker } from "./MetricColorPicker";
 import { usePreferences } from "@/hooks/usePreferences";
@@ -8,7 +8,15 @@ import { useNodeStoreStatus } from "@/hooks/useNode";
 import { FAILURE_STREAK_WARN_THRESHOLD } from "@/services/wsStore";
 import { useAuth } from "@/hooks/useAuth";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
+import type { NodeViewMode } from "@/utils/themeSettings";
 import { clsx } from "clsx";
+
+const VIEW_MODE_META: Record<NodeViewMode, { icon: typeof LayoutGrid; label: string }> = {
+  large: { icon: LayoutGrid, label: "大视图" },
+  compact: { icon: Rows3, label: "小视图" },
+  mini: { icon: Grid3x3, label: "迷你视图" },
+  list: { icon: List, label: "列表视图" },
+};
 
 const APPEARANCE_OPTIONS = [
   { value: "light", icon: Sun, label: "浅色" },
@@ -27,7 +35,7 @@ export function FloatingControls({ onExpandedChange }: { onExpandedChange?: (exp
 
 function FloatingControlsInner({ onExpandedChange }: { onExpandedChange?: (expanded: boolean) => void }) {
   const { appearance, setAppearance } = usePreferences();
-  const { mode, toggleMode } = useViewMode();
+  const { mode, nextMode, toggleMode } = useViewMode();
   const { data: me } = useAuth();
   const themeSettings = useThemeSettings();
   const { failureStreak } = useNodeStoreStatus();
@@ -47,7 +55,8 @@ function FloatingControlsInner({ onExpandedChange }: { onExpandedChange?: (expan
   const showSyncWarning = failureStreak >= FAILURE_STREAK_WARN_THRESHOLD;
   const hiddenTabIndex = collapsed ? -1 : undefined;
   const ToggleIcon = collapsed ? ChevronLeft : ChevronRight;
-  const ViewIcon = mode === "compact" ? LayoutGrid : Rows3;
+  const ViewIcon = VIEW_MODE_META[nextMode].icon;
+  const isReducedView = mode !== "large";
 
   return (
     <div
@@ -88,13 +97,13 @@ function FloatingControlsInner({ onExpandedChange }: { onExpandedChange?: (expan
                 <button
                   type="button"
                   onClick={toggleMode}
-                  aria-label="紧凑视图"
-                  aria-pressed={mode === "compact"}
-                  title={mode === "compact" ? "临时切换到大视图" : "临时切换到小视图"}
+                  aria-label="切换卡片视图"
+                  aria-pressed={isReducedView}
+                  title={`临时切换到${VIEW_MODE_META[nextMode].label}`}
                   tabIndex={hiddenTabIndex}
                   className={clsx(
                     "control-button grid h-9 w-9 place-items-center",
-                    mode === "compact" && "control-toggle is-active",
+                    isReducedView && "control-toggle is-active",
                   )}
                 >
                   <ViewIcon size={16} />

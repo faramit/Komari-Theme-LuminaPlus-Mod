@@ -1,0 +1,300 @@
+import { memo, useCallback } from "react";
+import { Link } from "react-router-dom";
+import { ArrowDown, ArrowUp, CircleDollarSign } from "lucide-react";
+import { clsx } from "clsx";
+import { Flag } from "@/components/ui/Flag";
+import { OsLogo } from "@/components/ui/OsLogo";
+import { useNodeCardModel } from "@/hooks/useNodeCardModel";
+import { usePreferences } from "@/hooks/usePreferences";
+import { useMetricColorsVersion } from "@/hooks/useMetricColors";
+import { formatBytes } from "@/utils/format";
+import { speedRateColor } from "@/utils/metricTone";
+import { CanvasStrip, fillRoundedRect, safeCanvasColor } from "./CanvasStrip";
+import { LatencyBars } from "./LatencyBars";
+import { formatOsLabel, joinTagTitle, nodeDetailLinkLabels } from "./nodeCardShared";
+
+const GAUGE_SEGMENTS = 14;
+const LIST_PING_BUCKETS = 12;
+
+function clamp01(value: number) {
+  return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0;
+}
+
+function pctText(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return "0";
+  return value >= 10 ? Math.round(value).toString() : value.toFixed(1);
+}
+
+function ListGauge({
+  value,
+  fraction,
+  paint,
+  redrawKey,
+  unit = "%",
+}: {
+  value: string;
+  fraction: number;
+  paint: string;
+  redrawKey: string;
+  unit?: string;
+}) {
+  const activeSegments = clamp01(fraction) * GAUGE_SEGMENTS;
+  const draw = useCallback(
+    (ctx: CanvasRenderingContext2D, width: number, height: number) => {
+      const inactive = safeCanvasColor("var(--progress-bg)");
+      const active = safeCanvasColor(paint);
+      const gap = 2;
+      const segWidth = Math.max(1, (width - gap * (GAUGE_SEGMENTS - 1)) / GAUGE_SEGMENTS);
+      for (let i = 0; i < GAUGE_SEGMENTS; i += 1) {
+        const x = i * (segWidth + gap);
+        const fill = Math.max(0, Math.min(1, activeSegments - i));
+        ctx.globalAlpha = 0.55;
+        ctx.fillStyle = inactive;
+        fillRoundedRect(ctx, x, 0, segWidth, height, 2);
+        if (fill > 0) {
+          ctx.globalAlpha = 0.42 + fill * 0.56;
+          ctx.fillStyle = active;
+          fillRoundedRect(ctx, x, 0, segWidth, height, 2);
+        }
+      }
+      ctx.globalAlpha = 1;
+    },
+    [activeSegments, paint],
+  );
+  return (
+    <div className="node-list-gauge">
+      <span className="node-list-gauge-value tabular">
+        {value}
+        {unit && <small>{unit}</small>}
+      </span>
+      <CanvasStrip className="node-list-gauge-track" height={8} redrawKey={redrawKey} draw={draw} />
+    </div>
+  );
+}
+
+function StackLine({
+  icon,
+  value,
+  unit,
+  color,
+}: {
+  icon?: React.ReactNode;
+  value: string;
+  unit?: string;
+  color?: string;
+}) {
+  return (
+    <span className="node-list-line" style={color ? { color } : undefined}>
+      {icon && <span className="node-list-line-icon">{icon}</span>}
+      <span className="node-list-line-value tabular">
+        {value}
+        {unit && <small>{unit}</small>}
+      </span>
+    </span>
+  );
+}
+
+function ListLatency({
+  latency,
+  latencyColor,
+  buckets,
+  max,
+  redrawKey,
+}: {
+  latency: number | null;
+  latencyColor: string;
+  buckets: Parameters<typeof LatencyBars>[0]["buckets"];
+  max: number;
+  redrawKey: string;
+}) {
+  return (
+    <div className="node-list-latency">
+      <span className="node-list-latency-value tabular" style={{ color: latencyColor }}>
+        {latency != null ? Math.round(latency) : "—"}
+        {latency != null && <small>ms</small>}
+      </span>
+      <LatencyBars buckets={buckets} max={max} redrawKey={redrawKey} height={14} />
+    </div>
+  );
+}
+
+const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
+  const { resolvedAppearance } = usePreferences();
+  const colorsVersion = useMetricColorsVersion();
+  const redrawKey = `${resolvedAppearance}:${colorsVersion}`;
+  const model = useNodeCardModel(uuid, LIST_PING_BUCKETS);
+
+  if (!model.node) {
+    return <div className="node-list-row is-loading" aria-busy />;
+  }
+
+  const {
+    node,
+    traffic,
+    ping,
+    pingBuckets,
+    footerTags,
+    expire,
+    expireColor,
+    uptime,
+    renewalPrice,
+    latencyColor,
+    loadFraction,
+    upRate,
+    downRate,
+    isOffline,
+    osName,
+  } = model;
+  const detailLabels = nodeDetailLinkLabels(node.name, osName);
+  const usedPct = `${Math.round(clamp01(traffic.fraction) * 100)}%`;
+  const rowLabel = [
+    node.name,
+    `系统 ${formatOsLabel(osName, node.os)}`,
+    `CPU ${pctText(node.cpuPct)}`,
+    `内存 ${pctText(node.ramPct)}`,
+    `磁盘 ${pctText(node.diskPct)}`,
+    `负载 ${node.load1.toFixed(2)}`,
+    `上行 ${upRate.value}${upRate.unit}`,
+    `下行 ${downRate.value}${downRate.unit}`,
+    `流量使用 ${usedPct}`,
+    `网络延迟 ${ping.lastValue == null ? "无样本" : `${Math.round(ping.lastValue)} 毫秒`}`,
+    node.online === true ? "在线" : node.online === false ? "离线" : "状态未知",
+    `运行 ${uptime.value}${uptime.unit}`,
+    `到期 ${expire.value}${expire.unit}`,
+    "查看详情",
+  ].join("，");
+
+  return (
+    <Link
+      to={`/instance/${encodeURIComponent(uuid)}`}
+      className={clsx("node-list-row", isOffline && "is-offline")}
+      title={detailLabels.title}
+      aria-label={rowLabel}
+    >
+      <div className="node-list-cell node-list-node">
+        <div className="node-list-node-text">
+          <div className="node-list-node-head">
+            <Flag region={node.region} size={14} />
+            <span className="node-list-name" title={node.name}>
+              {node.name}
+            </span>
+          </div>
+          {(renewalPrice || footerTags.length > 0) && (
+            <div className="node-list-chips" title={footerTags.length > 0 ? joinTagTitle(footerTags) : undefined}>
+              {renewalPrice && (
+                <span className="dstatus-price-chip">
+                  <CircleDollarSign size={12} strokeWidth={2.2} />
+                  {renewalPrice}
+                </span>
+              )}
+              {footerTags.map((tag, index) => (
+                <span
+                  key={`${tag.label}-${index}`}
+                  className="dstatus-tag-chip"
+                  data-tag={tag.color}
+                  style={{ background: "var(--tag-bg)", color: "var(--tag-fg)" }}
+                >
+                  {tag.label}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="node-list-cell col-os">
+        <OsLogo value={node.os} size={16} />
+        <span className="node-list-os-name" title={node.os || osName}>
+          {formatOsLabel(osName, node.os)}
+        </span>
+      </div>
+
+      <div className="node-list-cell col-metric">
+        <ListGauge value={pctText(node.cpuPct)} fraction={node.cpuPct / 100} paint="var(--progress-cpu)" redrawKey={redrawKey} />
+      </div>
+      <div className="node-list-cell col-metric">
+        <ListGauge value={pctText(node.ramPct)} fraction={node.ramPct / 100} paint="var(--progress-memory)" redrawKey={redrawKey} />
+      </div>
+      <div className="node-list-cell col-metric">
+        <ListGauge value={pctText(node.diskPct)} fraction={node.diskPct / 100} paint="var(--progress-disk)" redrawKey={redrawKey} />
+      </div>
+
+      <div className="node-list-cell col-load">
+        <ListGauge
+          value={node.load1.toFixed(2)}
+          unit=""
+          fraction={loadFraction}
+          paint="var(--progress-load)"
+          redrawKey={redrawKey}
+        />
+      </div>
+
+      <div className="node-list-cell col-live node-list-stack">
+        <StackLine
+          icon={<ArrowUp size={11} strokeWidth={2.4} />}
+          value={upRate.value}
+          unit={upRate.unit}
+          color={speedRateColor(upRate.unit)}
+        />
+        <StackLine
+          icon={<ArrowDown size={11} strokeWidth={2.4} />}
+          value={downRate.value}
+          unit={downRate.unit}
+          color={speedRateColor(downRate.unit)}
+        />
+      </div>
+
+      <div
+        className="node-list-cell col-traffic"
+        title={`剩余 ${traffic.remainingLabel} · ${traffic.detail}`}
+      >
+        <div className="node-list-traffic-rows">
+          <StackLine icon={<ArrowUp size={11} strokeWidth={2.1} />} value={formatBytes(node.trafficUp)} />
+          <StackLine icon={<ArrowDown size={11} strokeWidth={2.1} />} value={formatBytes(node.trafficDown)} />
+        </div>
+        <span className="node-list-traffic-quota" style={{ color: traffic.color }}>
+          {usedPct}
+        </span>
+      </div>
+
+      <div className="node-list-cell col-net">
+        <ListLatency
+          latency={ping.lastValue}
+          latencyColor={latencyColor}
+          buckets={pingBuckets}
+          max={ping.max}
+          redrawKey={redrawKey}
+        />
+      </div>
+
+      <div className="node-list-cell col-life node-list-stack">
+        <StackLine value={uptime.value} unit={uptime.unit} color="var(--progress-cpu)" />
+        <StackLine value={expire.value} unit={expire.unit} color={expireColor} />
+      </div>
+    </Link>
+  );
+});
+
+export function NodeListView({ uuids }: { uuids: string[] }) {
+  return (
+    <div className="node-list-scroll">
+      <div className="node-list">
+        <div className="node-list-row node-list-head" aria-hidden>
+          <div className="node-list-cell node-list-node">节点</div>
+          <div className="node-list-cell col-os">系统</div>
+          <div className="node-list-cell col-metric">CPU</div>
+          <div className="node-list-cell col-metric">内存</div>
+          <div className="node-list-cell col-metric">磁盘</div>
+          <div className="node-list-cell col-load">负载</div>
+          <div className="node-list-cell col-live">实时</div>
+          <div className="node-list-cell col-traffic">流量</div>
+          <div className="node-list-cell col-net">网络</div>
+          <div className="node-list-cell col-life">在线 / 到期</div>
+        </div>
+        {uuids.map((uuid) => (
+          <NodeRow key={uuid} uuid={uuid} />
+        ))}
+      </div>
+    </div>
+  );
+}

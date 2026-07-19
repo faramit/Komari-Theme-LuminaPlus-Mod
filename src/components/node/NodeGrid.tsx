@@ -35,7 +35,9 @@ import {
 } from "@/utils/overviewRating";
 import { CompactNodeCard } from "./CompactNodeCard";
 import { CostSummary } from "./CostSummary";
+import { MiniNodeCard } from "./MiniNodeCard";
 import { NodeCard } from "./NodeCard";
+import { NodeListView } from "./NodeListView";
 import { Flag } from "@/components/ui/Flag";
 import { getDisplayRegionCode } from "@/utils/geo";
 import { preloadAssetsPage } from "@/services/assetsPageLoader";
@@ -83,6 +85,7 @@ function HomeOverviewCards({
   bandwidthRatingLabels,
   assetRatingLabels,
   showDetailButton,
+  dense,
   onWarmTraffic,
 }: {
   overview: HomeOverview;
@@ -97,6 +100,7 @@ function HomeOverviewCards({
   bandwidthRatingLabels: string;
   assetRatingLabels: string;
   showDetailButton: boolean;
+  dense?: boolean;
   onWarmTraffic?: () => void;
 }) {
   const [trafficValue, trafficUnit] = formatBytes(
@@ -150,7 +154,7 @@ function HomeOverviewCards({
     ) : null;
 
   return (
-    <section className="home-overview" aria-label="首页总览">
+    <section className={`home-overview${dense ? " is-dense" : ""}`} aria-label="首页总览">
       <article className="overview-card">
         <div className="overview-card-head">
           <span className="overview-card-label">在线节点</span>
@@ -562,10 +566,17 @@ export function NodeGrid() {
     [orderedNodes],
   );
   const cards = useMemo(() => {
+    if (mode === "list") return null;
     const uuids = uuidsKey ? uuidsKey.split(UUID_KEY_SEPARATOR) : [];
     return uuids.map((uuid) => (
       <div key={uuid} className="min-w-0">
-        {mode === "compact" ? <CompactNodeCard uuid={uuid} /> : <NodeCard uuid={uuid} />}
+        {mode === "mini" ? (
+          <MiniNodeCard uuid={uuid} />
+        ) : mode === "compact" ? (
+          <CompactNodeCard uuid={uuid} />
+        ) : (
+          <NodeCard uuid={uuid} />
+        )}
       </div>
     ));
   }, [uuidsKey, mode]);
@@ -578,11 +589,24 @@ export function NodeGrid() {
     themeSettings.isReady && themeSettings.showRegionBar && regionOptions.length > 1;
   // 分组标签栏和卡片网格共用,让标签栏处在同一网格中、正好占一列卡片宽——
   // 边缘和第一张卡片对齐。
-  const gridClassName = mode === "compact" ? "grid gap-3 xl:gap-4" : "grid gap-4 xl:gap-5";
-  const gridColumns =
-    mode === "compact"
+  const isMini = mode === "mini";
+  const isList = mode === "list";
+  const gridClassName = isMini
+    ? "grid gap-3 xl:gap-3.5"
+    : mode === "compact"
+      ? "grid gap-3 xl:gap-4"
+      : "grid gap-4 xl:gap-5";
+  const gridColumns = isMini || isList
+    ? "repeat(auto-fill, minmax(min(100%, 340px), 1fr))"
+    : mode === "compact"
       ? "repeat(auto-fill, minmax(min(100%, 340px), 1fr))"
       : "repeat(auto-fill, minmax(min(100%, 360px), 1fr))";
+  const gridWrapClassName = isMini ? `${gridClassName} node-grid-mini` : gridClassName;
+  const gridStyle = isList
+    ? undefined
+    : isMini
+      ? ({ "--mini-card-min-width": "260px" } as React.CSSProperties)
+      : { gridTemplateColumns: gridColumns };
 
   if (!themeSettings.isReady || !storeHydrated) {
     if (!nodeInfoError) return null;
@@ -621,6 +645,7 @@ export function NodeGrid() {
           trafficRatingLabels={themeSettings.trafficRatingLabels}
           bandwidthRatingLabels={themeSettings.bandwidthRatingLabels}
           assetRatingLabels={themeSettings.assetRatingLabels}
+          dense={isMini || isList}
           onWarmTraffic={warmTrafficPage}
         />
       )}
@@ -643,8 +668,6 @@ export function NodeGrid() {
     <>
       {homeHeader}
       {(showGroupTabs || showHomeSort) && (
-        // 复用卡片网格的列定义:分组标签落第一列(=一张卡宽,随响应式动态变化、左缘对齐首卡,
-        // 沿用旧行为);排序控件钉最后一列右对齐。窄屏只剩 1 列时排序自动落到下一行右对齐。
         <div
           className={`${gridClassName} home-controls-bar mb-2`}
           style={{ gridTemplateColumns: gridColumns }}
@@ -666,9 +689,13 @@ export function NodeGrid() {
           onSelectRegion={setSelectedRegion}
         />
       )}
-      <div className={gridClassName} style={{ gridTemplateColumns: gridColumns }}>
-        {cards}
-      </div>
+      {isList ? (
+        <NodeListView uuids={uuidsKey ? uuidsKey.split(UUID_KEY_SEPARATOR) : []} />
+      ) : (
+        <div className={gridWrapClassName} style={gridStyle}>
+          {cards}
+        </div>
+      )}
     </>
   );
 }
