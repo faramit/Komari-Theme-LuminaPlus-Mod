@@ -92,6 +92,11 @@ body::after {
   background-blend-mode: normal, multiply, multiply, multiply, normal;
 }
 
+/* 有自定义背景图时清除 <body> 自身背景,避免遮盖 body::before 上的自定义图。 */
+:root[data-bg-custom] body {
+  background: transparent !important;
+}
+
 @media (max-width: 640px) {
   :root[data-appearance="light"] body {
     background-image:

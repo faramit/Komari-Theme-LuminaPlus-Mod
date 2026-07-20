@@ -202,6 +202,12 @@ export function applyBackgroundCache(
   }
   if (cache.scrim) root.style.setProperty("--bg-scrim", cache.scrim);
   else root.style.removeProperty("--bg-scrim");
+
+  if (desktop !== "none" || mobile !== "none") {
+    root.dataset.bgCustom = "true";
+  } else {
+    delete root.dataset.bgCustom;
+  }
 }
 
 export function persistBackgroundCache(cache: BackgroundCache): void {

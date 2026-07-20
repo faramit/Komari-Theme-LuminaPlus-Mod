@@ -95,6 +95,9 @@
                 document.documentElement.dataset.bgGlass = "true";
               }
               if (bg.scrim) style.setProperty("--bg-scrim", sanitizeCssVal(bg.scrim));
+              if (desktop && desktop !== "none") {
+                document.documentElement.dataset.bgCustom = "true";
+              }
             }
           }
         } catch {}
