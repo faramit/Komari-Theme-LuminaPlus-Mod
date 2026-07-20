@@ -350,6 +350,24 @@ let pingRefreshTimer: number | null = null;
 let pingAbortController: AbortController | null = null;
 let activeConsumers = 0;
 const pingListeners = new Map<string, Set<Listener>>();
+const previewOverrides = new Map<string, PingOverviewItem | null>();
+
+export function setPingPreview(uuid: string, item: PingOverviewItem | null) {
+  const prev = previewOverrides.get(uuid);
+  if (prev === item || (prev?.client === item?.client && prev?.lastValue === item?.lastValue && prev?.loss === item?.loss)) {
+    if (prev == null && item == null) return;
+    if (prev != null && item != null && prev.client === item.client && prev.lastValue === item.lastValue && prev.loss === item.loss) return;
+  }
+  if (item != null) {
+    previewOverrides.set(uuid, item);
+  } else {
+    previewOverrides.delete(uuid);
+  }
+  const listeners = pingListeners.get(uuid);
+  if (listeners) {
+    for (const listener of listeners) listener();
+  }
+}
 
 function schedulePingRefresh(intervalMs: number) {
   if (pingRefreshTimer != null) {
@@ -525,6 +543,8 @@ function subscribeToPingItem(uuid: string, listener: Listener) {
 }
 
 function getPingSnapshot(uuid: string) {
+  const preview = previewOverrides.get(uuid);
+  if (preview) return preview;
   return pingOverviewState.items.get(uuid) ?? EMPTY_PING;
 }
 

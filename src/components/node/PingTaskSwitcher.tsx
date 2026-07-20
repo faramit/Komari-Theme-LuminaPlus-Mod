@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getAdminPingTasks, saveThemeSettings } from "@/services/api";
+import { getAdminPingTasks, getPingOverview, saveThemeSettings } from "@/services/api";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { usePublicConfig } from "@/hooks/usePublicConfig";
+import { buildPingOverviewItems, setPingPreview } from "@/hooks/usePingMini";
 import { invertHomepagePingTaskBindings } from "@/utils/pingTasks";
 import type { ReactNode } from "react";
 
@@ -22,6 +23,7 @@ export function PingTaskSwitcher({ uuid, children }: Props) {
   const { data: config } = usePublicConfig();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const previewAbortRef = useRef<AbortController | null>(null);
 
   const { data: pingTasks = [] } = useQuery({
     queryKey: ["admin", "ping-tasks"],
@@ -42,6 +44,52 @@ export function PingTaskSwitcher({ uuid, children }: Props) {
     ? pingTasks.find((t) => String(t.id) === currentTaskIdStr)?.name
     : undefined;
 
+  const clearPreview = useCallback(() => {
+    previewAbortRef.current?.abort();
+    previewAbortRef.current = null;
+    setPingPreview(uuid, null);
+  }, [uuid]);
+
+  const triggerPreview = useCallback(
+    async (taskId: number) => {
+      if (taskId === currentTaskId) return;
+      previewAbortRef.current?.abort();
+      const controller = new AbortController();
+      previewAbortRef.current = controller;
+      try {
+        const resp = await getPingOverview(1, taskId, {
+          entityIds: [uuid],
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
+        const items = buildPingOverviewItems(
+          taskId,
+          resp.records,
+          resp.stats ?? [],
+          resp.intervalSeconds,
+        );
+        const item = items.get(uuid);
+        if (item) {
+          setPingPreview(uuid, item);
+        } else {
+          setPingPreview(uuid, {
+            client: uuid,
+            isAssigned: true,
+            lastValue: null,
+            samples: [],
+            max: 1,
+            loss: null,
+          });
+        }
+      } catch {
+        if (!controller.signal.aborted) {
+          setPingPreview(uuid, null);
+        }
+      }
+    },
+    [uuid, currentTaskId],
+  );
+
   const show = useCallback(() => {
     clearTimeout(timerRef.current);
     if (wrapperRef.current) {
@@ -59,18 +107,20 @@ export function PingTaskSwitcher({ uuid, children }: Props) {
     timerRef.current = setTimeout(() => {
       setOpen(false);
       setMenuStyle(null);
+      clearPreview();
     }, 200);
-  }, []);
+  }, [clearPreview]);
 
   useEffect(() => {
     if (!open) return;
     const onScroll = () => {
       setOpen(false);
       setMenuStyle(null);
+      clearPreview();
     };
     window.addEventListener("scroll", onScroll, true);
     return () => window.removeEventListener("scroll", onScroll, true);
-  }, [open]);
+  }, [open, clearPreview]);
 
   const handleSwitch = useCallback(
     async (event: React.MouseEvent, newTaskId: number) => {
@@ -95,6 +145,7 @@ export function PingTaskSwitcher({ uuid, children }: Props) {
         };
         await saveThemeSettings(config.theme, nextSettings);
         await queryClient.invalidateQueries({ queryKey: ["public"] });
+        clearPreview();
         setOpen(false);
         setMenuStyle(null);
       } catch {
@@ -104,7 +155,7 @@ export function PingTaskSwitcher({ uuid, children }: Props) {
         setSavingTaskId(null);
       }
     },
-    [uuid, homepagePingBindings, config, saving, queryClient],
+    [uuid, homepagePingBindings, config, saving, queryClient, clearPreview],
   );
 
   if (visibleTasks.length < 1 || pingTasks.length < 2) return <>{children}</>;
@@ -139,6 +190,7 @@ export function PingTaskSwitcher({ uuid, children }: Props) {
                     type="button"
                     disabled={saving || isCurrent}
                     onClick={(e) => handleSwitch(e, task.id)}
+                    onMouseEnter={() => triggerPreview(task.id)}
                     className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)] disabled:opacity-50"
                   >
                     <span className="flex-none w-4 text-[var(--text-tertiary)]">
