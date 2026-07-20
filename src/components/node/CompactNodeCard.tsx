@@ -1,4 +1,5 @@
 import { memo, useEffect, useRef, useState } from "react";
+import { PingTaskSwitcher } from "./PingTaskSwitcher";
 import type { CSSProperties, ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -629,22 +630,24 @@ function CompactTrafficBar({
 // ~60s 才刷新一次),所以在 ping 数据真正变化前,跳过重渲染 latency/loss HealthBars
 // 这棵子树 —— 它是每 tick DOM 开销的大头。
 const CompactNodeHealth = memo(function CompactNodeHealth({
+  uuid,
   ping,
   pingBuckets,
   latencyColor,
   lossColor,
   hasHomepagePingBinding,
 }: {
+  uuid: string;
   ping: PingOverviewItem;
   pingBuckets: PingOverviewBucket[];
   latencyColor: string;
   lossColor: string;
   hasHomepagePingBinding: boolean;
 }) {
-  // 已绑定但无样本时显示"无样本",未绑定时显示"未配置" —— 见 pingEmptyLabels。
   const { text: emptyText } = pingEmptyLabels(hasHomepagePingBinding);
   return (
-    <div className="compact-node-bottom">
+    <PingTaskSwitcher uuid={uuid}>
+      <div className="compact-node-bottom">
       <CompactHealthItem
         icon={<Clock3 size={12} />}
         label="延迟"
@@ -663,7 +666,8 @@ const CompactNodeHealth = memo(function CompactNodeHealth({
       >
         <HealthBars buckets={pingBuckets} max={1} kind="loss" />
       </CompactHealthItem>
-    </div>
+      </div>
+    </PingTaskSwitcher>
   );
 });
 
@@ -725,6 +729,7 @@ export const CompactNodeCard = memo(function CompactNodeCard({
       />
       <CompactTrafficBar traffic={traffic} uptimeLabel={uptimeLabel} />
       <CompactNodeHealth
+        uuid={uuid}
         ping={ping}
         pingBuckets={pingBuckets}
         latencyColor={latencyColor}

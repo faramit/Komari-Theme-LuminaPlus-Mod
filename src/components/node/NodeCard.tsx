@@ -1,4 +1,5 @@
 import { memo, useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { PingTaskSwitcher } from "./PingTaskSwitcher";
 import { Link } from "react-router-dom";
 import {
   Cpu,
@@ -134,6 +135,7 @@ export const NodeCard = memo(function NodeCard({
           <NodeTrafficQuota traffic={traffic} />
 
           <NodeHealthSection
+            uuid={uuid}
             ping={ping}
             pingBuckets={pingBuckets}
             redrawKey={redrawKey}
@@ -349,6 +351,7 @@ function NodeTrafficQuota({ traffic }: { traffic: TrafficDisplay }) {
 // ~60s 才刷新一次,hover 状态只在指针交互时变,onHover 是稳定的 setState 引用 ——
 // 所以 latency/loss 柱子这棵子树能跳过每个 tick 的工作。
 const NodeHealthSection = memo(function NodeHealthSection({
+  uuid,
   ping,
   pingBuckets,
   redrawKey,
@@ -364,6 +367,7 @@ const NodeHealthSection = memo(function NodeHealthSection({
   onLatencyHover,
   onLossHover,
 }: {
+  uuid: string;
   ping: PingOverviewItem;
   pingBuckets: PingOverviewBucket[];
   redrawKey: string;
@@ -382,7 +386,8 @@ const NodeHealthSection = memo(function NodeHealthSection({
   const { title: emptyTitle, text: emptyText } = pingEmptyLabels(hasHomepagePingBinding);
 
   return (
-    <div className="card-metric-section card-metric-divided server-health-grid">
+    <PingTaskSwitcher uuid={uuid}>
+      <div className="card-metric-section card-metric-divided server-health-grid">
       <div className="server-health-block">
         <div className="server-health-head">
           <div className="server-health-label">
@@ -466,7 +471,8 @@ const NodeHealthSection = memo(function NodeHealthSection({
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </PingTaskSwitcher>
   );
 });
 

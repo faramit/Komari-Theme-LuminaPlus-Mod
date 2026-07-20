@@ -1,4 +1,5 @@
 import { memo, type CSSProperties, type ReactNode } from "react";
+import { PingTaskSwitcher } from "./PingTaskSwitcher";
 import { Link } from "react-router-dom";
 import {
   ArrowDown,
@@ -299,12 +300,14 @@ function MiniHealthBars({
 }
 
 const MiniHealth = memo(function MiniHealth({
+  uuid,
   ping,
   pingBuckets,
   latencyColor,
   lossColor,
   hasHomepagePingBinding,
 }: {
+  uuid: string;
   ping: PingOverviewItem;
   pingBuckets: PingOverviewBucket[];
   latencyColor: string;
@@ -313,7 +316,8 @@ const MiniHealth = memo(function MiniHealth({
 }) {
   const { text: emptyText } = pingEmptyLabels(hasHomepagePingBinding);
   return (
-    <div className="mini-node-health">
+    <PingTaskSwitcher uuid={uuid}>
+      <div className="mini-node-health">
       <div className="mini-node-health-item">
         <div className="mini-node-health-head">
           <span className="mini-node-health-label">
@@ -352,7 +356,8 @@ const MiniHealth = memo(function MiniHealth({
         </div>
         <MiniHealthBars kind="loss" buckets={pingBuckets} />
       </div>
-    </div>
+      </div>
+    </PingTaskSwitcher>
   );
 });
 
@@ -390,6 +395,7 @@ export const MiniNodeCard = memo(function MiniNodeCard({ uuid }: { uuid: string 
       <MiniVitals node={node} loadFraction={loadFraction} />
       <MiniFlow node={node} upRate={upRate} downRate={downRate} />
       <MiniHealth
+        uuid={uuid}
         ping={ping}
         pingBuckets={pingBuckets}
         latencyColor={latencyColor}

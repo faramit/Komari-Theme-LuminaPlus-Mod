@@ -1,4 +1,5 @@
 import { memo, useCallback } from "react";
+import { PingTaskSwitcher } from "./PingTaskSwitcher";
 import { Link } from "react-router-dom";
 import { ArrowDown, ArrowUp, CircleDollarSign } from "lucide-react";
 import { clsx } from "clsx";
@@ -95,12 +96,14 @@ function StackLine({
 }
 
 function ListLatency({
+  uuid,
   latency,
   latencyColor,
   buckets,
   max,
   redrawKey,
 }: {
+  uuid: string;
   latency: number | null;
   latencyColor: string;
   buckets: Parameters<typeof LatencyBars>[0]["buckets"];
@@ -108,13 +111,15 @@ function ListLatency({
   redrawKey: string;
 }) {
   return (
-    <div className="node-list-latency">
+    <PingTaskSwitcher uuid={uuid}>
+      <div className="node-list-latency">
       <span className="node-list-latency-value tabular" style={{ color: latencyColor }}>
         {latency != null ? Math.round(latency) : "—"}
         {latency != null && <small>ms</small>}
       </span>
       <LatencyBars buckets={buckets} max={max} redrawKey={redrawKey} height={14} />
-    </div>
+      </div>
+    </PingTaskSwitcher>
   );
 }
 
@@ -259,6 +264,7 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
 
       <div className="node-list-cell col-net">
         <ListLatency
+          uuid={uuid}
           latency={ping.lastValue}
           latencyColor={latencyColor}
           buckets={pingBuckets}
