@@ -256,6 +256,7 @@ function pickManagedThemeSettings(settings: ResolvedThemeSettings) {
     desktopNodeViewMode: settings.desktopNodeViewMode,
     mobileNodeViewMode: settings.mobileNodeViewMode,
     homepagePingBindings: settings.homepagePingBindings,
+    enablePingTaskBar: settings.enablePingTaskBar,
     showHomeOverview: settings.showHomeOverview,
     showGroupTabs: settings.showGroupTabs,
     showRegionBar: settings.showRegionBar,
@@ -1002,7 +1003,23 @@ export function ThemeManage() {
             <input
               type="checkbox"
               checked={draft.enableHomeSort}
-              onChange={(event) => patch("enableHomeSort", event.target.checked)}
+            onChange={(event) => patch("enableHomeSort", event.target.checked)}
+            className="h-4 w-4 shrink-0 accent-[var(--accent-500)]"
+          />
+        </label>
+          <label className="surface-inset flex items-center justify-between gap-3 px-4 py-3">
+            <span className="min-w-0">
+              <span className="block text-[13px] font-medium text-[var(--text-primary)]">
+                快速切换巡检任务
+              </span>
+              <span className="mt-1 block text-[11px] text-[var(--text-tertiary)]">
+                卡片延迟/丢包下方显示内联色条，可悬停预览、点击切换检测任务。
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              checked={draft.enablePingTaskBar}
+              onChange={(event) => patch("enablePingTaskBar", event.target.checked)}
               className="h-4 w-4 shrink-0 accent-[var(--accent-500)]"
             />
           </label>

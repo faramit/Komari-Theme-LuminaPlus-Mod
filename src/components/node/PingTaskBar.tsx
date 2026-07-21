@@ -16,7 +16,7 @@ export function PingTaskBar({ uuid, children }: Props) {
   const [saving, setSaving] = useState(false);
   const [savingTaskId, setSavingTaskId] = useState<number | null>(null);
   const queryClient = useQueryClient();
-  const { homepagePingBindings } = useThemeSettings();
+  const { homepagePingBindings, enablePingTaskBar } = useThemeSettings();
   const { data: config } = usePublicConfig();
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const previewAbortRef = useRef<AbortController | null>(null);
@@ -128,7 +128,7 @@ export function PingTaskBar({ uuid, children }: Props) {
     [triggerPreview],
   );
 
-  if (visibleTasks.length < 1 || pingTasks.length < 2) return <>{children}</>;
+  if (!enablePingTaskBar || visibleTasks.length < 1 || pingTasks.length < 2) return <>{children}</>;
 
   return (
     <div>

@@ -31,6 +31,7 @@ export interface ResolvedThemeSettings {
   mobileNodeViewMode: NodeViewMode;
   enableAdminButton: boolean;
   showPingChart: boolean;
+  enablePingTaskBar: boolean;
   homepagePingBindings: HomepagePingTaskBindings;
   showHomeOverview: boolean;
   showGroupTabs: boolean;
@@ -70,6 +71,7 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   mobileNodeViewMode: "compact",
   enableAdminButton: true,
   showPingChart: true,
+  enablePingTaskBar: true,
   homepagePingBindings: {},
   showHomeOverview: true,
   showGroupTabs: true,
@@ -162,6 +164,7 @@ export function normalizeThemeSettings(
     ),
     enableAdminButton: enabledUnlessFalse(settings?.enableAdminButton),
     showPingChart: enabledUnlessFalse(settings?.showPingChart),
+    enablePingTaskBar: enabledUnlessFalse(settings?.enablePingTaskBar),
     homepagePingBindings: normalizeHomepagePingTaskBindings(settings?.homepagePingBindings),
     showHomeOverview: enabledUnlessFalse(settings?.showHomeOverview),
     showGroupTabs: enabledUnlessFalse(settings?.showGroupTabs),
