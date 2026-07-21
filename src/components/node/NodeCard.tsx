@@ -1,5 +1,5 @@
 import { memo, useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { PingTaskSwitcher } from "./PingTaskSwitcher";
+import { PingTaskBar } from "./PingTaskBar";
 import { Link } from "react-router-dom";
 import {
   Cpu,
@@ -386,7 +386,7 @@ const NodeHealthSection = memo(function NodeHealthSection({
   const { title: emptyTitle, text: emptyText } = pingEmptyLabels(hasHomepagePingBinding);
 
   return (
-    <PingTaskSwitcher uuid={uuid}>
+    <PingTaskBar uuid={uuid}>
       <div className="card-metric-section card-metric-divided server-health-grid">
       <div className="server-health-block">
         <div className="server-health-head">
@@ -472,7 +472,7 @@ const NodeHealthSection = memo(function NodeHealthSection({
         </div>
       </div>
       </div>
-    </PingTaskSwitcher>
+    </PingTaskBar>
   );
 });
 

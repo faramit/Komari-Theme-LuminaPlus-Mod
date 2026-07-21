@@ -1,5 +1,5 @@
 import { memo, type CSSProperties, type ReactNode } from "react";
-import { PingTaskSwitcher } from "./PingTaskSwitcher";
+import { PingTaskBar } from "./PingTaskBar";
 import { Link } from "react-router-dom";
 import {
   ArrowDown,
@@ -316,7 +316,7 @@ const MiniHealth = memo(function MiniHealth({
 }) {
   const { text: emptyText } = pingEmptyLabels(hasHomepagePingBinding);
   return (
-    <PingTaskSwitcher uuid={uuid}>
+    <PingTaskBar uuid={uuid}>
       <div className="mini-node-health">
       <div className="mini-node-health-item">
         <div className="mini-node-health-head">
@@ -357,7 +357,7 @@ const MiniHealth = memo(function MiniHealth({
         <MiniHealthBars kind="loss" buckets={pingBuckets} />
       </div>
       </div>
-    </PingTaskSwitcher>
+    </PingTaskBar>
   );
 });
 

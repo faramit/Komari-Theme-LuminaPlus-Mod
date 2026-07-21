@@ -1,5 +1,5 @@
 import { memo, useCallback } from "react";
-import { PingTaskSwitcher } from "./PingTaskSwitcher";
+import { PingTaskBar } from "./PingTaskBar";
 import { Link } from "react-router-dom";
 import { ArrowDown, ArrowUp, CircleDollarSign } from "lucide-react";
 import { clsx } from "clsx";
@@ -111,7 +111,7 @@ function ListLatency({
   redrawKey: string;
 }) {
   return (
-    <PingTaskSwitcher uuid={uuid}>
+    <PingTaskBar uuid={uuid}>
       <div className="node-list-latency">
       <span className="node-list-latency-value tabular" style={{ color: latencyColor }}>
         {latency != null ? Math.round(latency) : "—"}
@@ -119,7 +119,7 @@ function ListLatency({
       </span>
       <LatencyBars buckets={buckets} max={max} redrawKey={redrawKey} height={14} />
       </div>
-    </PingTaskSwitcher>
+    </PingTaskBar>
   );
 }
 

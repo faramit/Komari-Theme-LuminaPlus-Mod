@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState } from "react";
-import { PingTaskSwitcher } from "./PingTaskSwitcher";
+import { PingTaskBar } from "./PingTaskBar";
 import type { CSSProperties, ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -646,7 +646,7 @@ const CompactNodeHealth = memo(function CompactNodeHealth({
 }) {
   const { text: emptyText } = pingEmptyLabels(hasHomepagePingBinding);
   return (
-    <PingTaskSwitcher uuid={uuid}>
+    <PingTaskBar uuid={uuid}>
       <div className="compact-node-bottom">
       <CompactHealthItem
         icon={<Clock3 size={12} />}
@@ -667,7 +667,7 @@ const CompactNodeHealth = memo(function CompactNodeHealth({
         <HealthBars buckets={pingBuckets} max={1} kind="loss" />
       </CompactHealthItem>
       </div>
-    </PingTaskSwitcher>
+    </PingTaskBar>
   );
 });
 
